@@ -18,7 +18,7 @@ export default function Home() {
 	}, [isAuthenticated, router]);
 
 	return (
-		<div className="min-h-screen flex items-center justify-center">
+		<div className="min-h-screen grid-bg flex items-center justify-center">
 			<LoadingSpinner />
 		</div>
 	);

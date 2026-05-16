@@ -3,8 +3,9 @@
 import { BackButton, ErrorMessage, LoadingSpinner } from '@/components/Common';
 import MainLayout from '@/components/MainLayout';
 import SensorCard from '@/components/SensorCard';
-import SensorChart from '@/components/SensorChart';
-import { usePond, useSensorReadings } from '@/hooks/useApi';
+import SensorChart from '@/components/charts/SensorChart';
+import { usePond, useSensorReadings, type Range } from '@/hooks/useApi';
+import { useThresholds } from '@/hooks/useThresholds';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
@@ -15,49 +16,12 @@ interface SensorDetailProps {
 
 const SENSOR_CONFIGS: Record<
 	string,
-	{
-		label: string;
-		icon: string;
-		unit: string;
-		optimal: { min: number; max: number };
-		color: string;
-	}
+	{ label: string; icon: string; unit: string; color: string }
 > = {
-	temperature: {
-		label: 'Temperature',
-		icon: '🌡️',
-		unit: '°C',
-		optimal: { min: 22, max: 27 },
-		color: '#22c55e',
-	},
-	ph: {
-		label: 'pH Level',
-		icon: '⚗️',
-		unit: 'pH',
-		optimal: { min: 6.5, max: 7.5 },
-		color: '#86efac',
-	},
-	dox: {
-		label: 'Dissolved Oxygen',
-		icon: '💨',
-		unit: 'mg/L',
-		optimal: { min: 5, max: 8 },
-		color: '#4ade80',
-	},
-	salinity: {
-		label: 'Salinity',
-		icon: '🧂',
-		unit: 'ppt',
-		optimal: { min: 15, max: 30 },
-		color: '#16a34a',
-	},
-	humidity: {
-		label: 'Humidity',
-		icon: '💧',
-		unit: '%',
-		optimal: { min: 60, max: 85 },
-		color: '#86efac',
-	},
+	temperature: { label: 'Temperature', icon: '🌡️', unit: '°C', color: '#22c55e' },
+	ph: { label: 'pH Level', icon: '⚗️', unit: 'pH', color: '#86efac' },
+	dox: { label: 'Dissolved Oxygen', icon: '💨', unit: 'mg/L', color: '#4ade80' },
+	salinity: { label: 'Salinity', icon: '🧂', unit: 'ppt', color: '#16a34a' },
 };
 
 export default function SensorDetailPage({ params }: SensorDetailProps) {
@@ -65,14 +29,25 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 	const router = useRouter();
 	const { isAuthenticated } = useAuthStore();
 	const { pond, isLoading: isPondLoading } = usePond(pondId);
-	const [dateRange, setDateRange] = useState(7);
-	const [customDate, setCustomDate] = useState({ from: '', to: '' });
-	const [useCustomDate, setUseCustomDate] = useState(false);
+	const { lookup } = useThresholds(pondId);
+	const optimal = lookup(sensorType);
+	const [range, setRange] = useState<Range>('7d');
 	const {
 		readings,
+		payload,
 		isLoading: isReadingsLoading,
+		isValidating,
+		lastUpdated,
+		refresh,
 		error,
-	} = useSensorReadings(pondId, sensorType, dateRange);
+	} = useSensorReadings(pondId, sensorType, range);
+
+	const RANGE_OPTIONS: { value: Range; label: string }[] = [
+		{ value: 'today', label: 'Today' },
+		{ value: '7d', label: '7d' },
+		{ value: '14d', label: '14d' },
+		{ value: '30d', label: '30d' },
+	];
 
 	useEffect(() => {
 		if (!isAuthenticated) router.push('/login');
@@ -96,75 +71,64 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 				<div>
 					<BackButton
 						href={`/dashboard/${pondId}`}
-						label={`← Back to ${pond?.name || 'Pond'}`}
+						label={`Back to ${pond?.name || 'Pond'}`}
 					/>
-					<h1 className="text-4xl font-bold text-gray-900 mt-4">
-						{config.label}
-					</h1>
-					<p className="text-gray-600 mt-2">
-						{pond?.name} • {config.unit}
-					</p>
+					<div className="flex items-end justify-between flex-wrap gap-4 mt-2">
+						<div>
+							<div className="flex items-center gap-2 mb-2">
+								<span className="text-2xl">{config.icon}</span>
+								<span className="text-[11px] uppercase tracking-[0.18em] font-semibold text-cyan-300">
+									{pond?.name} · {config.unit}
+								</span>
+							</div>
+							<h1 className="text-4xl font-bold text-white tracking-tight">
+								{config.label}
+							</h1>
+						</div>
+					</div>
 				</div>
 
-				<div className="flex gap-2 items-center flex-wrap">
-					<button
-						onClick={() => {
-							setUseCustomDate(false);
-							setDateRange(1);
-						}}
-						className={`px-4 py-2 rounded font-medium transition-colors ${
-							!useCustomDate && dateRange === 1
-								? 'bg-green-600 text-white'
-								: 'bg-white text-gray-700 hover:bg-green-50'
-						}`}>
-						Today
-					</button>
-					{[7, 14, 30].map((days) => (
-						<button
-							key={days}
-							onClick={() => {
-								setUseCustomDate(false);
-								setDateRange(days);
-							}}
-							className={`px-4 py-2 rounded font-medium transition-colors ${
-								!useCustomDate && dateRange === days
-									? 'bg-green-600 text-white'
-									: 'bg-white text-gray-700 hover:bg-green-50'
-							}`}>
-							Last {days} days
-						</button>
-					))}
-					<button
-						onClick={() => setUseCustomDate(!useCustomDate)}
-						className={`px-4 py-2 rounded font-medium transition-colors ${
-							useCustomDate
-								? 'bg-green-600 text-white'
-								: 'bg-white text-gray-700 hover:bg-green-50'
-						}`}>
-						Custom Range
-					</button>
-				</div>
-				{useCustomDate && (
-					<div className="flex gap-2 items-center">
-						<input
-							type="date"
-							value={customDate.from}
-							onChange={(e) =>
-								setCustomDate({ ...customDate, from: e.target.value })
-							}
-							className="px-3 py-2 border border-gray-300 rounded text-gray-900"
-						/>
-						<span className="text-gray-600">to</span>
-						<input
-							type="date"
-							value={customDate.to}
-							onChange={(e) =>
-								setCustomDate({ ...customDate, to: e.target.value })
-							}
-							className="px-3 py-2 border border-gray-300 rounded text-gray-900"
-						/>
+				<div className="flex items-center gap-3 flex-wrap">
+					<div className="inline-flex items-center gap-1 p-1 rounded-lg border border-[var(--border)] bg-white/3">
+						{RANGE_OPTIONS.map((opt) => (
+							<button
+								key={opt.value}
+								onClick={() => setRange(opt.value)}
+								className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+									range === opt.value
+										? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_15px_-5px_rgba(34,211,238,0.6)]'
+										: 'text-slate-400 hover:text-slate-200'
+								}`}>
+								{opt.label}
+							</button>
+						))}
 					</div>
-				)}
+					<button
+						onClick={refresh}
+						disabled={isValidating}
+						title="Refresh"
+						aria-label="Refresh"
+						className="p-2 rounded-lg border border-[var(--border)] bg-white/5 text-slate-300 hover:bg-white/10 hover:text-cyan-300 hover:border-cyan-400/40 disabled:opacity-50 transition-colors">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							className={`w-4 h-4 ${isValidating ? 'animate-spin' : ''}`}>
+							<polyline points="23 4 23 10 17 10" />
+							<polyline points="1 20 1 14 7 14" />
+							<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+						</svg>
+					</button>
+					<span className="text-[11px] text-slate-500 font-mono">
+						{lastUpdated
+							? `Last sync: ${new Date(lastUpdated).toLocaleTimeString()}`
+							: '—'}
+					</span>
+				</div>
 
 				{error && <ErrorMessage message="Failed to load sensor data" />}
 
@@ -173,120 +137,152 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 				) : (
 					<>
 						<div>
-							<h2 className="text-2xl font-semibold text-gray-900 mb-4">
+							<h2 className="text-xs uppercase tracking-[0.18em] font-semibold text-slate-400 mb-3">
 								Current Reading
 							</h2>
 							<SensorCard
 								title={config.label}
 								reading={latestReading}
 								icon={config.icon}
-								optimal={config.optimal}
+								optimal={optimal}
 								isLoading={isReadingsLoading}
 							/>
 						</div>
 
 						{readings && readings.length > 0 && (
 							<div>
-								<h2 className="text-2xl font-semibold text-gray-900 mb-4">
+								<h2 className="text-xs uppercase tracking-[0.18em] font-semibold text-slate-400 mb-3">
 									Statistics
 								</h2>
-								<div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-									<div className="bg-white rounded-lg shadow p-6">
-										<p className="text-gray-600 text-sm">Current</p>
-										<p className="text-3xl font-bold text-green-600 mt-2">
-											{latestReading?.value.toFixed(2) || 'N/A'} {config.unit}
-										</p>
-									</div>
-									<div className="bg-white rounded-lg shadow p-6">
-										<p className="text-gray-600 text-sm">Average</p>
-										<p className="text-3xl font-bold text-green-700 mt-2">
-											{(
-												readings.reduce((sum, r) => sum + r.value, 0) /
-												readings.length
-											).toFixed(2)}{' '}
-											{config.unit}
-										</p>
-									</div>
-									<div className="bg-white rounded-lg shadow p-6">
-										<p className="text-gray-600 text-sm">Maximum</p>
-										<p className="text-3xl font-bold text-red-600 mt-2">
-											{Math.max(...readings.map((r) => r.value)).toFixed(2)}{' '}
-											{config.unit}
-										</p>
-									</div>
-									<div className="bg-white rounded-lg shadow p-6">
-										<p className="text-gray-600 text-sm">Minimum</p>
-										<p className="text-3xl font-bold text-orange-600 mt-2">
-											{Math.min(...readings.map((r) => r.value)).toFixed(2)}{' '}
-											{config.unit}
-										</p>
-									</div>
+								<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+									<StatBlock
+										label="Current"
+										value={`${latestReading?.value.toFixed(2) || 'N/A'}`}
+										unit={config.unit}
+										accent="cyan"
+									/>
+									<StatBlock
+										label="Average"
+										value={(
+											readings.reduce((sum, r) => sum + r.value, 0) / readings.length
+										).toFixed(2)}
+										unit={config.unit}
+										accent="emerald"
+									/>
+									<StatBlock
+										label="Maximum"
+										value={Math.max(...readings.map((r) => r.value)).toFixed(2)}
+										unit={config.unit}
+										accent="rose"
+									/>
+									<StatBlock
+										label="Minimum"
+										value={Math.min(...readings.map((r) => r.value)).toFixed(2)}
+										unit={config.unit}
+										accent="amber"
+									/>
 								</div>
 							</div>
 						)}
 
 						{readings && readings.length > 0 && (
 							<div>
-								<h2 className="text-2xl font-semibold text-gray-900 mb-4">
+								<h2 className="text-xs uppercase tracking-[0.18em] font-semibold text-slate-400 mb-3">
 									Trend Analysis
 								</h2>
 								<SensorChart
-									title={`${config.label} Over Time`}
-									data={readings}
-									color={config.color}
+									mode={payload?.mode === 'aggregated' ? 'aggregated' : 'raw'}
+									sensor={
+										sensorType === 'dox'
+											? 'dissolved_oxygen'
+											: (sensorType as
+													| 'temperature'
+													| 'ph'
+													| 'salinity'
+													| 'dissolved_oxygen')
+									}
+									unit={config.unit}
+									label={`${config.label} Over Time`}
+									range={range}
 									isLoading={isReadingsLoading}
-									optimalRange={config.optimal}
+									optimalMin={optimal?.min}
+									optimalMax={optimal?.max}
+									data={payload?.mode === 'raw' ? payload.data : undefined}
+									aggregated={
+										payload?.mode === 'aggregated' ? payload.data : undefined
+									}
+									bucketSize={
+										payload?.mode === 'aggregated' ? payload.bucketSize : undefined
+									}
 								/>
 							</div>
 						)}
 
 						{readings && readings.length > 0 && (
 							<div>
-								<h2 className="text-2xl font-semibold text-gray-900 mb-4">
+								<h2 className="text-xs uppercase tracking-[0.18em] font-semibold text-slate-400 mb-3">
 									Recent Readings
 								</h2>
-								<div className="bg-white rounded-lg shadow overflow-x-auto">
-									<table className="w-full">
-										<thead className="bg-gray-50">
-											<tr>
-												<th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-													Time
-												</th>
-												<th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-													Value
-												</th>
-												<th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-													Status
-												</th>
-											</tr>
-										</thead>
-										<tbody className="divide-y divide-gray-200">
-											{readings
-												.slice(-20)
-												.reverse()
-												.map((reading, idx) => {
-													const isOptimal =
-														reading.value >= config.optimal.min &&
-														reading.value <= config.optimal.max;
-													return (
-														<tr key={idx} className="hover:bg-gray-50">
-															<td className="px-6 py-4 text-sm text-gray-900">
-																{new Date(reading.timestamp).toLocaleString()}
-															</td>
-															<td className="px-6 py-4 text-sm text-gray-900 font-semibold">
-																{reading.value.toFixed(2)} {config.unit}
-															</td>
-															<td className="px-6 py-4 text-sm">
-																<span
-																	className={`px-3 py-1 rounded-full text-xs font-semibold ${isOptimal ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-																	{isOptimal ? 'Optimal' : 'Alert'}
-																</span>
-															</td>
-														</tr>
-													);
-												})}
-										</tbody>
-									</table>
+								<div className="rounded-xl border border-[var(--border)] bg-linear-to-br from-[rgba(20,28,51,0.85)] to-[rgba(15,23,42,0.85)] backdrop-blur-sm overflow-hidden">
+									<div className="overflow-x-auto">
+										<table className="w-full">
+											<thead className="bg-white/3 border-b border-white/5">
+												<tr>
+													<th className="px-6 py-3 text-left text-[11px] uppercase tracking-[0.14em] font-semibold text-slate-400">
+														Time
+													</th>
+													<th className="px-6 py-3 text-left text-[11px] uppercase tracking-[0.14em] font-semibold text-slate-400">
+														Value
+													</th>
+													<th className="px-6 py-3 text-left text-[11px] uppercase tracking-[0.14em] font-semibold text-slate-400">
+														Status
+													</th>
+												</tr>
+											</thead>
+											<tbody className="divide-y divide-white/5">
+												{readings
+													.slice(-20)
+													.reverse()
+													.map((reading, idx) => {
+														const isOptimal =
+															optimal !== undefined &&
+															reading.value >= optimal.min &&
+															reading.value <= optimal.max;
+														return (
+															<tr key={idx} className="hover:bg-white/3 transition-colors">
+																<td className="px-6 py-3 text-sm text-slate-300 font-mono">
+																	{new Date(reading.timestamp).toLocaleString()}
+																</td>
+																<td className="px-6 py-3 text-sm text-white font-semibold font-mono">
+																	{reading.value.toFixed(2)}{' '}
+																	<span className="text-slate-500 font-normal">
+																		{config.unit}
+																	</span>
+																</td>
+																<td className="px-6 py-3 text-sm">
+																	<span
+																		className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border ${
+																			isOptimal
+																				? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/30'
+																				: 'bg-rose-500/10 text-rose-300 border-rose-400/30'
+																		}`}>
+																		<span
+																			className="w-1.5 h-1.5 rounded-full"
+																			style={{
+																				backgroundColor: isOptimal
+																					? '#34d399'
+																					: '#fb7185',
+																			}}
+																		/>
+																		{isOptimal ? 'Optimal' : 'Alert'}
+																	</span>
+																</td>
+															</tr>
+														);
+													})}
+											</tbody>
+										</table>
+									</div>
 								</div>
 							</div>
 						)}
@@ -294,5 +290,39 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 				)}
 			</div>
 		</MainLayout>
+	);
+}
+
+function StatBlock({
+	label,
+	value,
+	unit,
+	accent,
+}: {
+	label: string;
+	value: string;
+	unit: string;
+	accent: 'cyan' | 'emerald' | 'rose' | 'amber';
+}) {
+	const map = {
+		cyan: { text: 'text-cyan-300', bar: '#22d3ee' },
+		emerald: { text: 'text-emerald-300', bar: '#34d399' },
+		rose: { text: 'text-rose-300', bar: '#fb7185' },
+		amber: { text: 'text-amber-300', bar: '#fbbf24' },
+	}[accent];
+	return (
+		<div className="relative overflow-hidden rounded-xl border border-[var(--border)] bg-linear-to-br from-[rgba(20,28,51,0.85)] to-[rgba(15,23,42,0.85)] backdrop-blur-sm p-5">
+			<div
+				className="absolute inset-x-0 top-0 h-px"
+				style={{ background: `linear-gradient(90deg, transparent, ${map.bar}80, transparent)` }}
+			/>
+			<p className="text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400">
+				{label}
+			</p>
+			<p className={`text-mono text-3xl font-bold mt-2 ${map.text}`}>
+				{value}
+				<span className="text-base text-slate-500 ml-1.5 font-normal">{unit}</span>
+			</p>
+		</div>
 	);
 }

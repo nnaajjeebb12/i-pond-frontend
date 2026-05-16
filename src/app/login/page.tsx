@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuthStore } from '@/store/authStore';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -10,9 +10,50 @@ interface LoginFormData {
 	password: string;
 }
 
+const DEMO_ACCOUNTS = [
+	{
+		email: 'admin@soletronix.com',
+		password: 'admin123',
+		role: 'Admin',
+		desc: 'Full access',
+		accent: 'violet',
+	},
+	{
+		email: 'owner1@ipond.com',
+		password: 'owner123',
+		role: 'Owner One',
+		desc: 'Ponds 1-5',
+		accent: 'cyan',
+	},
+	{
+		email: 'owner2@ipond.com',
+		password: 'owner123',
+		role: 'Owner Two',
+		desc: 'Ponds 6-10',
+		accent: 'emerald',
+	},
+];
+
+const ACCENT_MAP: Record<string, { dot: string; pill: string; border: string }> = {
+	violet: {
+		dot: 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.7)]',
+		pill: 'bg-violet-500/10 text-violet-300 border-violet-400/30',
+		border: 'hover:border-violet-400/50',
+	},
+	cyan: {
+		dot: 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]',
+		pill: 'bg-cyan-500/10 text-cyan-300 border-cyan-400/30',
+		border: 'hover:border-cyan-400/50',
+	},
+	emerald: {
+		dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]',
+		pill: 'bg-emerald-500/10 text-emerald-300 border-emerald-400/30',
+		border: 'hover:border-emerald-400/50',
+	},
+};
+
 export default function LoginPage() {
 	const router = useRouter();
-	const { login } = useAuthStore();
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState('');
 
@@ -23,8 +64,8 @@ export default function LoginPage() {
 		setValue,
 	} = useForm<LoginFormData>({
 		defaultValues: {
-			email: 'admin@ipond.com',
-			password: 'password123',
+			email: 'admin@soletronix.com',
+			password: 'admin123',
 		},
 	});
 
@@ -33,9 +74,20 @@ export default function LoginPage() {
 		setError('');
 
 		try {
-			await login(data.email, data.password);
+			const res = await signIn('credentials', {
+				email: data.email,
+				password: data.password,
+				redirect: false,
+			});
+
+			if (!res || res.error) {
+				setError('Invalid email or password.');
+				return;
+			}
+
 			router.push('/dashboard');
-		} catch (err) {
+			router.refresh();
+		} catch {
 			setError('Login failed. Please try again.');
 		} finally {
 			setIsLoading(false);
@@ -43,19 +95,43 @@ export default function LoginPage() {
 	};
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-green-600 to-green-800 flex items-center justify-center p-4">
-			<div className="w-full max-w-md">
-				<div className="bg-white rounded-lg shadow-xl p-8">
-					<h1 className="text-3xl font-bold text-center text-gray-900 mb-2">
-						i-Pond
-					</h1>
-					<p className="text-center text-gray-600 mb-8">
-						Aquaculture Monitoring System
-					</p>
+		<div className="relative min-h-screen overflow-hidden grid-bg flex items-center justify-center p-4">
+			<div className="pointer-events-none absolute -top-40 -left-40 w-[480px] h-[480px] rounded-full bg-cyan-500/10 blur-3xl" />
+			<div className="pointer-events-none absolute -bottom-40 -right-40 w-[520px] h-[520px] rounded-full bg-violet-500/10 blur-3xl" />
+			<div className="pointer-events-none absolute top-1/3 right-1/4 w-[300px] h-[300px] rounded-full bg-emerald-500/8 blur-3xl" />
+
+			<div className="relative w-full max-w-md">
+				<div className="flex items-center justify-center gap-2 mb-6">
+					<div className="relative w-11 h-11 rounded-xl bg-linear-to-br from-cyan-500/30 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center">
+						<svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+							<path d="M12 2.5C8 8 5 11 5 14.5a7 7 0 0 0 14 0c0-3.5-3-6.5-7-12Z" />
+						</svg>
+						<span className="absolute -top-1 -right-1 live-dot" />
+					</div>
+					<div>
+						<h1 className="text-2xl font-bold tracking-tight text-white">See ME</h1>
+						<p className="text-[11px] text-slate-400 -mt-0.5 uppercase tracking-[0.18em]">
+							Aquaculture Control
+						</p>
+					</div>
+				</div>
+
+				<div className="rounded-2xl border border-[var(--border)] bg-linear-to-b from-[rgba(20,28,51,0.8)] to-[rgba(10,15,31,0.9)] backdrop-blur-xl p-8 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)]">
+					<div className="flex items-center gap-2 mb-6">
+						<span className="live-dot" />
+						<span className="text-[11px] font-semibold text-emerald-300 tracking-[0.16em] uppercase">
+							Console Access
+						</span>
+					</div>
 
 					<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 						{error && (
-							<div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+							<div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-300 text-sm flex items-start gap-2">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 mt-0.5 shrink-0">
+									<circle cx="12" cy="12" r="10" />
+									<line x1="12" y1="8" x2="12" y2="12" />
+									<line x1="12" y1="16" x2="12.01" y2="16" />
+								</svg>
 								{error}
 							</div>
 						)}
@@ -63,7 +139,7 @@ export default function LoginPage() {
 						<div>
 							<label
 								htmlFor="email"
-								className="block text-sm font-medium text-gray-700 mb-1">
+								className="block text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400 mb-1.5">
 								Email
 							</label>
 							<input
@@ -76,104 +152,85 @@ export default function LoginPage() {
 										message: 'Please enter a valid email',
 									},
 								})}
-								className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900"
-								placeholder="Enter your email"
+								className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 text-slate-100 placeholder:text-slate-500 transition-colors"
+								placeholder="you@domain.com"
 							/>
 							{errors.email && (
-								<p className="mt-1 text-sm text-red-600">
-									{errors.email.message}
-								</p>
+								<p className="mt-1 text-xs text-rose-400">{errors.email.message}</p>
 							)}
-							<p className="mt-2 text-xs text-gray-500">
-								Demo: admin@ipond.com
-							</p>
 						</div>
 
 						<div>
 							<label
 								htmlFor="password"
-								className="block text-sm font-medium text-gray-700 mb-1">
+								className="block text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400 mb-1.5">
 								Password
 							</label>
 							<input
 								id="password"
 								type="password"
 								{...register('password', { required: 'Password is required' })}
-								className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-900"
-								placeholder="Enter your password"
+								className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 text-slate-100 placeholder:text-slate-500 transition-colors"
+								placeholder="••••••••"
 							/>
 							{errors.password && (
-								<p className="mt-1 text-sm text-red-600">
-									{errors.password.message}
-								</p>
+								<p className="mt-1 text-xs text-rose-400">{errors.password.message}</p>
 							)}
-							<p className="mt-2 text-xs text-gray-500">Demo: password123</p>
 						</div>
 
 						<button
 							type="submit"
 							disabled={isLoading}
-							className="w-full mt-6 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors">
-							{isLoading ? 'Logging in...' : 'Sign In'}
+							className="w-full mt-2 px-4 py-2.5 bg-linear-to-r from-cyan-500 to-emerald-500 disabled:from-slate-600 disabled:to-slate-600 text-slate-950 font-semibold rounded-lg transition-all hover:shadow-[0_0_30px_-5px_rgba(34,211,238,0.5)] disabled:shadow-none">
+							{isLoading ? 'Authenticating…' : 'Sign In →'}
 						</button>
 					</form>
 
-					<div className="mt-8 pt-8 border-t border-gray-200">
-						<h3 className="text-sm font-semibold text-gray-900 mb-4">
-							Demo Accounts (Password: password123)
-						</h3>
-						<div className="space-y-3">
-							{[
-								{
-									email: 'admin@ipond.com',
-									role: 'Admin',
-									desc: 'Full access + User Management',
-								},
-								{
-									email: 'operator1@ponds.com',
-									role: 'Operator 1',
-									desc: 'Ponds 1, 2, 3',
-								},
-								{
-									email: 'operator2@ponds.com',
-									role: 'Operator 2',
-									desc: 'Ponds 4, 5, 6',
-								},
-								{
-									email: 'viewer1@ponds.com',
-									role: 'Viewer 1',
-									desc: 'Views Operator 1 ponds',
-								},
-								{
-									email: 'viewer2@ponds.com',
-									role: 'Viewer 2',
-									desc: 'Views Operator 2 ponds',
-								},
-							].map((account) => (
-								<button
-									key={account.email}
-									type="button"
-									onClick={() => {
-										setValue('email', account.email);
-										setValue('password', 'password123');
-									}}
-									className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-									<div className="flex justify-between items-start">
-										<div>
-											<p className="font-medium text-gray-900">
-												{account.role}
-											</p>
-											<p className="text-gray-600 text-xs">{account.email}</p>
+					<div className="mt-7 pt-6 border-t border-white/5">
+						<div className="flex items-center justify-between mb-3">
+							<h3 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400">
+								Demo Accounts
+							</h3>
+							<span className="text-[10px] text-slate-500">click to autofill</span>
+						</div>
+						<div className="space-y-2">
+							{DEMO_ACCOUNTS.map((account) => {
+								const a = ACCENT_MAP[account.accent];
+								return (
+									<button
+										key={account.email}
+										type="button"
+										onClick={() => {
+											setValue('email', account.email);
+											setValue('password', account.password);
+										}}
+										className={`w-full text-left p-3 border border-white/10 bg-white/3 rounded-lg ${a.border} hover:bg-white/5 transition-all cursor-pointer group`}>
+										<div className="flex justify-between items-center gap-3">
+											<div className="flex items-center gap-2.5 min-w-0">
+												<span className={`w-2 h-2 rounded-full shrink-0 ${a.dot}`} />
+												<div className="min-w-0">
+													<p className="font-semibold text-slate-100 text-sm truncate">
+														{account.role}
+													</p>
+													<p className="text-slate-400 text-[11px] font-mono truncate">
+														{account.email}
+													</p>
+												</div>
+											</div>
+											<span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${a.pill} shrink-0 uppercase tracking-wider`}>
+												{account.desc}
+											</span>
 										</div>
-										<span className="text-xs text-green-600 font-medium">
-											{account.desc}
-										</span>
-									</div>
-								</button>
-							))}
+									</button>
+								);
+							})}
 						</div>
 					</div>
 				</div>
+
+				<p className="text-center text-[11px] text-slate-500 mt-6 font-mono">
+					v1.0 • realtime IoT telemetry
+				</p>
 			</div>
 		</div>
 	);

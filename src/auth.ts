@@ -1,0 +1,51 @@
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { pool } from "@/lib/db";
+import { authConfig } from "./auth.config";
+
+type OwnerRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "owner" | "viewer";
+  password_hash: string;
+};
+
+export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
+  providers: [
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const password = String(credentials?.password ?? "");
+        if (!email || !password) return null;
+
+        const { rows } = await pool.query<OwnerRow>(
+          `SELECT id, name, email, role, password_hash
+             FROM owners
+            WHERE LOWER(email) = $1
+            LIMIT 1`,
+          [email]
+        );
+
+        const user = rows[0];
+        if (!user || !user.password_hash) return null;
+
+        const ok = await bcrypt.compare(password, user.password_hash);
+        if (!ok) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        };
+      },
+    }),
+  ],
+});

@@ -13,17 +13,18 @@ export interface Pond {
 	location: string;
 	capacity: number;
 	area: number;
-	operatorId?: string;
+	pond_code?: string | null;
+	company_name?: string | null;
 }
 
 export interface User {
 	id: string;
 	email: string;
 	name: string;
-	role: 'admin' | 'operator' | 'viewer';
-	createdAt: number;
+	role: 'admin' | 'owner' | 'viewer';
+	createdAt: number | string | null;
 	pondIds?: string[];
-	operatorId?: string;
+	company_name?: string | null;
 }
 
 export interface DashboardData {

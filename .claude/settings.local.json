@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm uninstall *)",
+      "Bash(npx tsc *)",
+      "Bash(npx tsx *)",
+      "Bash(docker exec *)",
+      "PowerShell(docker exec -i soletronix-timescaledb psql -U user -d soletronix -f /docker-entrypoint-initdb.d/009_pond_status_log.sql)",
+      "PowerShell(docker exec soletronix-timescaledb psql -U user -d soletronix -c \"TRUNCATE pond_status_log;\")",
+      "PowerShell(docker exec -i soletronix-timescaledb psql -U user -d soletronix -f /docker-entrypoint-initdb.d/011_status_logger_job.sql)",
+      "PowerShell(docker exec soletronix-timescaledb psql -U user -d soletronix -c \"SELECT job_id, proc_name FROM timescaledb_information.jobs WHERE proc_name = 'record_pond_statuses';\")",
+      "PowerShell(docker exec soletronix-timescaledb psql -U user -d soletronix -c \"WITH consecutive AS \\(SELECT pond_id, recorded_at, LEAD\\(recorded_at\\) OVER \\(PARTITION BY pond_id ORDER BY recorded_at\\) AS next_at FROM pond_status_log WHERE recorded_at >= CURRENT_DATE AND recorded_at < CURRENT_DATE + INTERVAL '1 day'\\), gaps AS \\(SELECT pond_id, EXTRACT\\(EPOCH FROM \\(next_at - recorded_at\\)\\) AS gap_seconds, CASE WHEN EXTRACT\\(EPOCH FROM \\(next_at - recorded_at\\)\\) < 60 THEN 'online' WHEN EXTRACT\\(EPOCH FROM \\(next_at - recorded_at\\)\\) < 180 THEN 'stale' ELSE 'offline' END AS status FROM consecutive WHERE next_at IS NOT NULL\\) SELECT pond_id, status, ROUND\\(\\(SUM\\(gap_seconds\\)/60.0\\)::numeric, 2\\) AS minutes FROM gaps GROUP BY pond_id, status ORDER BY pond_id, status;\")",
+      "PowerShell(docker exec soletronix-timescaledb psql -U user -d soletronix -c \"SELECT id, email, role FROM owners ORDER BY role, email LIMIT 10;\")",
+      "PowerShell(npm run seed:utilization)",
+      "Bash(npm run *)",
+      "Bash(find \"j:/1. Projects/5. github iPond/i-pond-frontend\" -maxdepth 4 -name \"SKILL.md\" 2>/dev/null && find \"C:/Users/Naj/.claude\" -name \"SKILL.md\" 2>/dev/null | head -30)",
+      "Read(//c/Users/Naj/.claude/**)",
+      "Bash(npx skills *)",
+      "Bash(cd \"j:/1. Projects/5. github iPond/i-pond-frontend\" && mkdir -p docs scripts/docs && ls docs scripts/docs 2>&1)",
+      "Bash(node scripts/docs/user-guide.js)",
+      "Bash(node scripts/docs/admin-guide.js)",
+      "Bash(node scripts/docs/full-documentation.js)",
+      "Bash(node scripts/docs/technical-documentation.js)",
+      "Bash(node scripts/docs/database-documentation.js)",
+      "Bash(python \"C:/Users/Naj/.claude/skills/docx/scripts/office/validate.py\" \"j:/1. Projects/5. github iPond/i-pond-frontend/docs/User-Guide.docx\")",
+      "Bash(pip install *)",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/Naj/.claude/skills/docx/scripts/office/validate.py\" \"docs/User-Guide.docx\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/Naj/.claude/skills/docx/scripts/office/validate.py\" \"docs/Full-Documentation.docx\")",
+      "Bash(python \"C:/Users/Naj/.claude/skills/docx/scripts/office/unpack.py\" docs/User-Guide.docx /tmp/unpacked-ug)",
+      "Bash(cd \"j:/1. Projects/5. github iPond/i-pond-frontend\" && head -50 /tmp/unpacked-ug/word/numbering.xml 2>&1 | head -30)",
+      "Read(//tmp/unpacked-ug/word/**)",
+      "Bash(grep -n \"charmap\\\\|cp1252\\\\|encoding=\" \"C:/Users/Naj/.claude/skills/docx/scripts/office/validators/base.py\" 2>&1 | head -20)",
+      "Read(//c/Users/Naj/.agents/skills/docx/scripts/office/validators/**)",
+      "Bash(python \"C:/Users/Naj/.claude/skills/docx/scripts/office/soffice.py\" --headless --convert-to pdf docs/User-Guide.docx --outdir /tmp/)",
+      "Bash(where soffice *)",
+      "Read(//c/Program Files/LibreOffice/program/**)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

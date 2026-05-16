@@ -1,127 +1,356 @@
-import { API_BASE_URL } from '@/constants/endpoints';
-import {
-	generateMockPonds,
-	generateMockUsers,
-	Pond,
-	SensorReading,
-	User,
-} from '@/mocks/mockData';
-import {
-	getAllPondsStaticReadings,
-	getStaticReadingsByDateRange,
-} from '@/mocks/staticData';
-import { useAuthStore } from '@/store/authStore';
+import { Pond, SensorReading } from '@/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR, { SWRConfiguration } from 'swr';
 
-const mockUsers = generateMockUsers();
+export type Range = 'today' | '7d' | '14d' | '30d' | '1y';
 
-const mockFetcher = {
-	ponds: async (): Promise<Pond[]> => {
-		const data = generateMockPonds(10);
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		return data;
-	},
-	pond: async (pondId: string): Promise<Pond | null> => {
-		const ponds = generateMockPonds(10);
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		return ponds.find((p: Pond) => p.id === pondId) || null;
-	},
-	user: async (): Promise<User | null> => {
-		const users = generateMockUsers();
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		return users[0] || null;
-	},
-	readings: async (
-		pondId: string,
-		sensorType: string,
-		days: number = 7,
-	): Promise<SensorReading[]> => {
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		const readings = getStaticReadingsByDateRange(pondId, sensorType, days);
-		const sampleSize = Math.min(readings.length, 200);
-		return readings.slice(-sampleSize);
-	},
-	allPondsReadings: async (
-		sensorType: string,
-		days: number = 7,
-	): Promise<SensorReading[]> => {
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		const readings = getAllPondsStaticReadings(sensorType, days);
-		const sampleSize = Math.min(readings.length, 100);
-		return readings.slice(-sampleSize);
-	},
+export type AggregatedBucket = {
+	time: number;
+	avg: number;
+	min: number;
+	max: number;
+	anomalyCount: number;
+	trend: 'rising' | 'falling' | 'stable';
+};
+
+export type RawPoint = {
+	time: number;
+	value: number;
+};
+
+export type ReadingsPayload =
+	| { mode: 'raw'; data: RawPoint[] }
+	| { mode: 'aggregated'; bucketSize: string; data: AggregatedBucket[] };
+
+export type PondWithOwner = Pond & {
+	company_name?: string | null;
+};
+
+const SENSOR_UNITS: Record<string, string> = {
+	temperature: '°C',
+	ph: 'pH',
+	dox: 'mg/L',
+	dissolved_oxygen: 'mg/L',
+	salinity: 'ppt',
+};
+
+const SENSOR_PARAM: Record<string, string> = {
+	temperature: 'temperature',
+	ph: 'ph',
+	dox: 'dissolved_oxygen',
+	dissolved_oxygen: 'dissolved_oxygen',
+	salinity: 'salinity',
 };
 
 const swrConfig: SWRConfiguration = {
+	refreshInterval: 10_000,
 	revalidateOnFocus: false,
-	revalidateOnReconnect: false,
-	dedupingInterval: 300000,
+	revalidateOnReconnect: true,
+	keepPreviousData: true,
+	dedupingInterval: 2_000,
 };
 
-export function usePonds() {
-	const { user } = useAuthStore();
-	const { data, error, isLoading } = useSWR<Pond[]>(
-		'ponds',
-		mockFetcher.ponds,
-		swrConfig,
-	);
-
-	let filteredPonds = data;
-	if (user && user.role === 'operator' && user.pondIds) {
-		filteredPonds = data?.filter((pond) => user.pondIds!.includes(pond.id));
-	} else if (user && user.role === 'viewer' && user.operatorId) {
-		const operator = mockUsers.find((u) => u.id === user.operatorId);
-		if (operator && 'pondIds' in operator) {
-			filteredPonds = data?.filter((pond) =>
-				(operator as any).pondIds?.includes(pond.id),
-			);
-		}
+async function jsonFetcher<T>(url: string): Promise<T> {
+	const res = await fetch(url, { credentials: 'include' });
+	if (!res.ok) {
+		const body = await res.text().catch(() => '');
+		throw new Error(`fetch ${url} -> ${res.status} ${body.slice(0, 100)}`);
 	}
+	return (await res.json()) as T;
+}
 
-	return { ponds: filteredPonds, isLoading, error };
+type LatestPayload = {
+	pondId: string;
+	time: string | null;
+	timestamp: number | null;
+	temperature: number | null;
+	ph: number | null;
+	salinity: number | null;
+	dissolved_oxygen: number | null;
+};
+
+export function unitFor(sensorType: string): string {
+	return SENSOR_UNITS[sensorType] ?? '';
+}
+
+export function usePonds() {
+	const { data, error, isLoading } = useSWR<PondWithOwner[]>(
+		'/api/ponds',
+		jsonFetcher,
+		swrConfig
+	);
+	return { ponds: data, isLoading, error };
 }
 
 export function usePond(pondId?: string) {
-	const { data, error, isLoading } = useSWR<Pond | null>(
-		pondId ? `pond-${pondId}` : null,
-		pondId ? () => mockFetcher.pond(pondId) : null,
-		swrConfig,
-	);
-	return { pond: data, isLoading, error };
+	const { ponds, isLoading, error } = usePonds();
+	const pond = pondId ? ponds?.find((p) => p.id === pondId) ?? null : null;
+	return { pond, isLoading, error };
 }
 
-export function useUser() {
-	const { data, error, isLoading } = useSWR<User | null>(
-		'user',
-		mockFetcher.user,
-		swrConfig,
+function useTabVisible(): boolean {
+	const [visible, setVisible] = useState(true);
+	useEffect(() => {
+		if (typeof document === 'undefined') return;
+		setVisible(!document.hidden);
+		const onChange = () => setVisible(!document.hidden);
+		document.addEventListener('visibilitychange', onChange);
+		return () => document.removeEventListener('visibilitychange', onChange);
+	}, []);
+	return visible;
+}
+
+export function useReadings(
+	pondId: string | null,
+	sensorType: string,
+	range: Range
+) {
+	const param = SENSOR_PARAM[sensorType];
+	const enabled = !!param && (pondId === null || !!pondId);
+	const isTodayPond = enabled && range === 'today' && !!pondId;
+
+	const visible = useTabVisible();
+	const [todayBuffer, setTodayBuffer] = useState<RawPoint[]>([]);
+	const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
+	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+	const resetKeyRef = useRef<string>('');
+
+	// Reset append state when pond/sensor/range changes.
+	const resetKey = `${pondId ?? ''}|${sensorType}|${range}`;
+	useEffect(() => {
+		if (resetKeyRef.current === resetKey) return;
+		resetKeyRef.current = resetKey;
+		setTodayBuffer([]);
+		setLastTimestamp(null);
+		setLastUpdated(null);
+	}, [resetKey]);
+
+	const baseUrl = enabled
+		? `/api/readings?${pondId ? `pond=${encodeURIComponent(pondId)}&` : ''}sensor=${param}&range=${range}`
+		: null;
+	const url =
+		baseUrl && isTodayPond && lastTimestamp !== null
+			? `${baseUrl}&since=${lastTimestamp}`
+			: baseUrl;
+
+	const { data, error, isLoading, isValidating, mutate } = useSWR<ReadingsPayload>(
+		url,
+		jsonFetcher,
+		{
+			...swrConfig,
+			refreshInterval: visible ? 10_000 : 0,
+		}
 	);
-	return { user: data, isLoading, error };
+
+	// Revalidate immediately when tab returns to visible.
+	useEffect(() => {
+		if (visible && url) mutate();
+	}, [visible, url, mutate]);
+
+	// Merge today payloads (initial load = replace, subsequent polls = append).
+	useEffect(() => {
+		if (!data) return;
+		if (isTodayPond && data.mode === 'raw') {
+			if (lastTimestamp === null) {
+				setTodayBuffer(data.data);
+				if (data.data.length > 0) {
+					setLastTimestamp(data.data[data.data.length - 1].time);
+				}
+			} else if (data.data.length > 0) {
+				setTodayBuffer((prev) => [...prev, ...data.data]);
+				setLastTimestamp(data.data[data.data.length - 1].time);
+			}
+		}
+		setLastUpdated(Date.now());
+	}, [data, isTodayPond, lastTimestamp]);
+
+	const refresh = useCallback(() => {
+		if (isTodayPond) {
+			setTodayBuffer([]);
+			setLastTimestamp(null);
+			setLastUpdated(null);
+		} else {
+			mutate();
+		}
+	}, [isTodayPond, mutate]);
+
+	const payload: ReadingsPayload | undefined = isTodayPond
+		? lastTimestamp === null && todayBuffer.length === 0
+			? data
+			: { mode: 'raw', data: todayBuffer }
+		: data;
+
+	return { payload, isLoading, error, isValidating, lastUpdated, refresh };
 }
 
 export function useSensorReadings(
 	pondId: string,
 	sensorType: string,
-	days: number = 7,
+	range: Range = '7d'
 ) {
-	const { data, error, isLoading } = useSWR<SensorReading[]>(
-		`readings-${pondId}-${sensorType}-${days}`,
-		() => mockFetcher.readings(pondId, sensorType, days),
-		swrConfig,
-	);
-	return { readings: data, isLoading, error };
+	const { payload, isLoading, error, isValidating, lastUpdated, refresh } =
+		useReadings(pondId, sensorType, range);
+
+	const readings: SensorReading[] | undefined = payload
+		? payload.mode === 'raw'
+			? payload.data.map((p) => ({
+					id: `${pondId}-${sensorType}-${p.time}`,
+					timestamp: p.time,
+					value: p.value,
+					unit: unitFor(sensorType),
+					sensorId: `${pondId}-${sensorType}`,
+					pondId,
+				}))
+			: payload.data.map((p) => ({
+					id: `${pondId}-${sensorType}-${p.time}`,
+					timestamp: p.time,
+					value: p.avg,
+					unit: unitFor(sensorType),
+					sensorId: `${pondId}-${sensorType}`,
+					pondId,
+				}))
+		: undefined;
+
+	return { payload, readings, isLoading, error, isValidating, lastUpdated, refresh };
 }
 
-export function useAllPondsReadings(sensorType: string, days: number = 7) {
-	const { data, error, isLoading } = useSWR<SensorReading[]>(
-		`all-readings-${sensorType}-${days}`,
-		() => mockFetcher.allPondsReadings(sensorType, days),
-		swrConfig,
+export type RawReadingsQuery =
+	| { mode: 'preset'; preset: 'today' | '7d' | '14d' | '30d' }
+	| { mode: 'custom'; from: string; to: string };
+
+type RawApiRow = {
+	timestamp: number;
+	value: number;
+	unit: string;
+	pondId: string;
+};
+
+export function useRawReadings(
+	pondId: string,
+	sensorType: string,
+	query: RawReadingsQuery | null
+) {
+	const param = SENSOR_PARAM[sensorType];
+	const enabled = !!param && !!pondId && !!query;
+
+	let url: string | null = null;
+	if (enabled && query) {
+		const qs = new URLSearchParams({ pond: pondId, sensor: param });
+		if (query.mode === 'preset') {
+			qs.set('range', query.preset);
+		} else {
+			qs.set('from', query.from);
+			qs.set('to', query.to);
+		}
+		url = `/api/readings/raw?${qs.toString()}`;
+	}
+
+	const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: RawApiRow[] }>(
+		url,
+		jsonFetcher,
+		swrConfig
 	);
-	return { readings: data, isLoading, error };
+
+	const readings: SensorReading[] | undefined = data?.data?.map((r) => ({
+		id: `${pondId}-${sensorType}-${r.timestamp}`,
+		timestamp: r.timestamp,
+		value: r.value,
+		unit: r.unit,
+		sensorId: `${pondId}-${sensorType}`,
+		pondId,
+	}));
+
+	return { readings, isLoading, error, isValidating, refresh: mutate };
+}
+
+export type AllReadingRow = {
+	time: number;
+	pondId: number;
+	pondName: string;
+	temperature: number | null;
+	ph: number | null;
+	salinity: number | null;
+	dissolved_oxygen: number | null;
+};
+
+export type AllReadingsScope =
+	| { mode: 'all' }
+	| { mode: 'mine' }
+	| { mode: 'select'; pondIds: string[] };
+
+export async function fetchAllReadings(
+	scope: AllReadingsScope,
+	from: string,
+	to: string
+): Promise<{ data: AllReadingRow[]; truncated?: boolean }> {
+	const qs = new URLSearchParams({ from, to });
+	if (scope.mode === 'all') qs.set('ponds', 'all');
+	else if (scope.mode === 'mine') qs.set('ponds', 'mine');
+	else qs.set('ponds', scope.pondIds.join(','));
+	const res = await fetch(`/api/readings/all?${qs.toString()}`, {
+		credentials: 'include',
+	});
+	if (!res.ok) {
+		const body = await res.text().catch(() => '');
+		throw new Error(`fetch all -> ${res.status} ${body.slice(0, 200)}`);
+	}
+	return (await res.json()) as { data: AllReadingRow[]; truncated?: boolean };
+}
+
+export function useAllPondsReadings(sensorType: string, range: Range = '7d') {
+	const { payload, isLoading, error } = useReadings(null, sensorType, range);
+
+	const readings: SensorReading[] | undefined = payload
+		? payload.mode === 'raw'
+			? payload.data.map((p) => ({
+					id: `all-${sensorType}-${p.time}`,
+					timestamp: p.time,
+					value: p.value,
+					unit: unitFor(sensorType),
+					sensorId: `all-${sensorType}`,
+					pondId: 'all',
+				}))
+			: payload.data.map((p) => ({
+					id: `all-${sensorType}-${p.time}`,
+					timestamp: p.time,
+					value: p.avg,
+					unit: unitFor(sensorType),
+					sensorId: `all-${sensorType}`,
+					pondId: 'all',
+				}))
+		: undefined;
+
+	return { payload, readings, isLoading, error };
+}
+
+function useLatestPayload(pondId: string) {
+	const url = pondId
+		? `/api/readings/latest?pond=${encodeURIComponent(pondId)}`
+		: null;
+	return useSWR<LatestPayload>(url, jsonFetcher, swrConfig);
 }
 
 export function useLatestReading(pondId: string, sensorType: string) {
-	const { readings, isLoading, error } = useSensorReadings(pondId, sensorType);
-	return { reading: readings?.[readings.length - 1] || null, isLoading, error };
+	const { data, error, isLoading } = useLatestPayload(pondId);
+
+	let reading: SensorReading | null = null;
+	if (data && data.timestamp !== null) {
+		const key =
+			sensorType === 'dox'
+				? 'dissolved_oxygen'
+				: (sensorType as keyof LatestPayload);
+		const value = data[key as keyof LatestPayload];
+		if (typeof value === 'number') {
+			reading = {
+				id: `${pondId}-${sensorType}-${data.timestamp}`,
+				timestamp: data.timestamp,
+				value,
+				unit: SENSOR_UNITS[sensorType] ?? '',
+				sensorId: `${pondId}-${sensorType}`,
+				pondId,
+			};
+		}
+	}
+
+	return { reading, isLoading, error };
 }
