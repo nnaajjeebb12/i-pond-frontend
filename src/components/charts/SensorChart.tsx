@@ -503,7 +503,6 @@ export default function SensorChart(props: Props) {
 
 		const u = new uPlot(opts, [aligned.xs, ...aligned.series] as uPlot.AlignedData, el);
 		plotRef.current = u;
-		setChartWidth(el.clientWidth || 600);
 
 		const ro = new ResizeObserver(() => {
 			if (!plotRef.current || !wrapRef.current) return;
@@ -677,11 +676,11 @@ export default function SensorChart(props: Props) {
 				<div className="flex items-center gap-3 flex-wrap">
 					{mode === 'compare' ? (
 						(compareSeries ?? []).map((s) => (
-							<LegendDot key={s.pondId} color={s.color} label={s.pondName} solid />
+							<LegendDot key={s.pondId} color={s.color} label={s.pondName} />
 						))
 					) : (
 						<>
-							<LegendDot color={color} label={mode === 'aggregated' ? 'avg' : label} solid />
+							<LegendDot color={color} label={mode === 'aggregated' ? 'avg' : label} />
 							{mode === 'aggregated' && (
 								<LegendDot color={color} label="min–max range" band />
 							)}
@@ -704,7 +703,7 @@ export default function SensorChart(props: Props) {
 								stats &&
 								'anomalyCount' in stats &&
 								(stats.anomalyCount ?? 0) > 0 && (
-									<LegendDot color="#ef4444" label={`${stats.anomalyCount} anomalies`} solid />
+									<LegendDot color="#ef4444" label={`${stats.anomalyCount} anomalies`} />
 								)}
 						</>
 					)}
@@ -749,13 +748,11 @@ function StatCell({
 function LegendDot({
 	color,
 	label,
-	solid: _solid,
 	dashed,
 	band,
 }: {
 	color: string;
 	label: string;
-	solid?: boolean;
 	dashed?: boolean;
 	band?: boolean;
 }) {

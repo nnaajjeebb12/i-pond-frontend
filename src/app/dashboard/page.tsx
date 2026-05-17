@@ -46,13 +46,12 @@ export default function DashboardPage() {
 	const isOwner = user?.role === 'owner';
 	const [range, setRange] = useState<Range>('7d');
 	const [viewMode, setViewMode] = useState<ViewMode>('aggregated');
-	const [selectedPondIds, setSelectedPondIds] = useState<Set<string> | null>(null);
-
-	useEffect(() => {
-		if (ponds && selectedPondIds === null) {
-			setSelectedPondIds(new Set(ponds.map((p) => p.id)));
-		}
-	}, [ponds, selectedPondIds]);
+	const [selectedOverride, setSelectedOverride] = useState<Set<string> | null>(null);
+	const selectedPondIds = useMemo<Set<string> | null>(() => {
+		if (selectedOverride !== null) return selectedOverride;
+		if (ponds) return new Set(ponds.map((p) => p.id));
+		return null;
+	}, [ponds, selectedOverride]);
 
 	const RANGE_OPTIONS: { value: Range; label: string }[] = [
 		{ value: 'today', label: 'Today' },
@@ -122,28 +121,24 @@ export default function DashboardPage() {
 	if (status === 'unauthenticated') return null;
 
 	function togglePond(id: string) {
-		setSelectedPondIds((prev) => {
-			if (!prev || !ponds) return prev;
-			const next = new Set(prev);
-			if (next.has(id)) {
-				if (next.size <= 1) return prev;
-				next.delete(id);
-			} else {
-				next.add(id);
-			}
-			return next;
-		});
+		if (!ponds || !selectedPondIds) return;
+		const next = new Set(selectedPondIds);
+		if (next.has(id)) {
+			if (next.size <= 1) return;
+			next.delete(id);
+		} else {
+			next.add(id);
+		}
+		setSelectedOverride(next);
 	}
 
 	function toggleAll() {
 		if (!ponds) return;
-		setSelectedPondIds((prev) => {
-			if (!prev) return new Set(ponds.map((p) => p.id));
-			if (prev.size === ponds.length) {
-				return new Set([ponds[0].id]);
-			}
-			return new Set(ponds.map((p) => p.id));
-		});
+		if (selectedPondIds && selectedPondIds.size === ponds.length) {
+			setSelectedOverride(new Set([ponds[0].id]));
+		} else {
+			setSelectedOverride(new Set(ponds.map((p) => p.id)));
+		}
 	}
 
 	const selectedCount = selectedPondIds?.size ?? 0;

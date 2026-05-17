@@ -2,7 +2,6 @@ import { Pool } from "pg";
 import { validateEnv } from "@/lib/env";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __pgPool: Pool | undefined;
 }
 
