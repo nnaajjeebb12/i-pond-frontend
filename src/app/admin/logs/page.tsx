@@ -180,7 +180,7 @@ function LogsView() {
 		}
 		seenIdsRef.current = next;
 		if (fresh.length === 0) return;
-		setHighlightIds(new Set(fresh));
+		setTimeout(() => setHighlightIds(new Set(fresh)), 0);
 		const t = setTimeout(() => setHighlightIds(new Set()), 2500);
 		return () => clearTimeout(t);
 	}, [data, page, query]);
