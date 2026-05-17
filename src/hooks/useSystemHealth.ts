@@ -49,7 +49,8 @@ export function useSystemHealth() {
 	const apiOk = !pondsSWR.error && !!pondsSWR.data;
 	const apiLoading = pondsSWR.isLoading && !pondsSWR.data;
 	const latestTs = latestSWR.data?.timestamp ?? null;
-	const age = latestTs !== null ? Date.now() - latestTs : null;
+	const now = useRef(Date.now());
+	const age = latestTs !== null ? now.current - latestTs : null;
 
 	let state: HealthState;
 	let label: string;
