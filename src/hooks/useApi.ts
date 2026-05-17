@@ -91,8 +91,8 @@ export function usePond(pondId?: string) {
 function useTabVisible(): boolean {
 	const [visible, setVisible] = useState(true);
 	useEffect(() => {
-		if (typeof document === 'undefined') return;
-		setVisible(!document.hidden);
+	    if (typeof document === 'undefined') return;
+	    setTimeout(() => setVisible(!document.hidden), 0);
 		const onChange = () => setVisible(!document.hidden);
 		document.addEventListener('visibilitychange', onChange);
 		return () => document.removeEventListener('visibilitychange', onChange);
@@ -118,11 +118,13 @@ export function useReadings(
 	// Reset append state when pond/sensor/range changes.
 	const resetKey = `${pondId ?? ''}|${sensorType}|${range}`;
 	useEffect(() => {
-		if (resetKeyRef.current === resetKey) return;
-		resetKeyRef.current = resetKey;
-		setTodayBuffer([]);
-		setLastTimestamp(null);
-		setLastUpdated(null);
+	    if (resetKeyRef.current === resetKey) return;
+	    resetKeyRef.current = resetKey;
+	    setTimeout(() => {
+	        setTodayBuffer([]);
+	        setLastTimestamp(null);
+	        setLastUpdated(null);
+	    }, 0);
 	}, [resetKey]);
 
 	const baseUrl = enabled
@@ -152,7 +154,7 @@ export function useReadings(
 		if (!data) return;
 		if (isTodayPond && data.mode === 'raw') {
 			if (lastTimestamp === null) {
-				setTodayBuffer(data.data);
+				setTimeout(() => setTodayBuffer(data.data), 0);
 				if (data.data.length > 0) {
 					setLastTimestamp(data.data[data.data.length - 1].time);
 				}

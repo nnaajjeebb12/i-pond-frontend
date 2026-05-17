@@ -168,7 +168,7 @@ function LogsView() {
 		lastQueryRef.current = query;
 		if (page !== 1 || queryChanged) {
 			seenIdsRef.current = new Set(data.logs.map((l) => l.id));
-			setHighlightIds(new Set());
+			setTimeout(() => setHighlightIds(new Set()), 0);
 			return;
 		}
 		const prev = seenIdsRef.current;

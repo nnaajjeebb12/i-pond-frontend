@@ -94,10 +94,7 @@ export default function ReportsPage() {
 		},
 	});
 
-	const rangeMode = watch('rangeMode');
-	const activePreset = watch('preset');
-	const customFrom = watch('customFrom');
-	const customTo = watch('customTo');
+	const { rangeMode, preset: activePreset, customFrom, customTo } = watch();
 
 	const customError = useMemo(() => {
 		if (rangeMode !== 'custom') return null;
