@@ -1,6 +1,7 @@
 'use client';
 
 import useSWR from 'swr';
+import { userRef } from 'react';
 
 type HealthState = 'live' | 'stale' | 'offline' | 'loading';
 
