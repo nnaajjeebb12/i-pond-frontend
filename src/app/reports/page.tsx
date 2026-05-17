@@ -15,7 +15,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 type Preset = 'today' | '7d' | '14d' | '30d';
 type RangeMode = 'preset' | 'custom';
@@ -83,7 +83,7 @@ export default function ReportsPage() {
 		null,
 	);
 
-	const { register, handleSubmit, watch, setValue } = useForm<ReportFormData>({
+	const { register, handleSubmit, control, setValue } = useForm<ReportFormData>({
 		defaultValues: {
 			pondId: '',
 			sensorType: 'temperature',
@@ -94,7 +94,7 @@ export default function ReportsPage() {
 		},
 	});
 
-	const { rangeMode, preset: activePreset, customFrom, customTo } = watch();
+	const { rangeMode, preset: activePreset, customFrom = '', customTo = '' } = useWatch({ control });
 
 	const customError = useMemo(() => {
 		if (rangeMode !== 'custom') return null;

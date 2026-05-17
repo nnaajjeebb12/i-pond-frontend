@@ -785,7 +785,7 @@ function ModalShell({
 	const [mounted, setMounted] = useState(false);
 
 	useEffect(() => {
-		setMounted(true);
+		setTimeout(() => setMounted(true), 0);
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') onClose();
 		};
