@@ -107,10 +107,12 @@ export default function MainLayout({ children }: LayoutProps) {
 	const health = useSystemHealth();
 	const unread = useUnreadCount();
 	const [drawerOpen, setDrawerOpen] = useState(false);
+	const [lastPath, setLastPath] = useState(pathname);
 
-	useEffect(() => {
+	if (lastPath !== pathname) {
+		setLastPath(pathname);
 		setDrawerOpen(false);
-	}, [pathname]);
+	}
 
 	useEffect(() => {
 		if (drawerOpen) document.body.style.overflow = 'hidden';
