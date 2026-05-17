@@ -2,7 +2,7 @@ import { Pond, SensorReading } from '@/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR, { SWRConfiguration } from 'swr';
 
-export type Range = 'today' | '7d' | '14d' | '30d' | '1y';
+export type Range = 'today' | '7d' | '14d' | '30d';
 
 export type AggregatedBucket = {
 	time: number;
