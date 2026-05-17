@@ -7,7 +7,7 @@ export default function ThemeToggle() {
 	const { theme, setTheme, resolvedTheme } = useTheme();
 	const [mounted, setMounted] = useState(false);
 
-	useEffect(() => setMounted(true), []);
+	useEffect(() => { setTimeout(() => setMounted(true), 0); }, []);
 	if (!mounted) {
 		return <div className="w-9 h-9" aria-hidden />;
 	}
