@@ -6,11 +6,15 @@ export type Threshold = {
 	sensor: string;
 	optimal_min: number;
 	optimal_max: number;
+	optimal_value: number | null;
 	updated_at: string;
 	updated_by: string | null;
 };
 
-export type ThresholdMap = Record<string, { min: number; max: number }>;
+export type ThresholdMap = Record<
+	string,
+	{ min: number; max: number; value: number | null }
+>;
 
 const swrConfig: SWRConfiguration = {
 	refreshInterval: 60_000,
@@ -49,11 +53,17 @@ export function useThresholds(pondId?: string | null) {
 	const map: ThresholdMap = {};
 	if (data) {
 		for (const t of data) {
-			map[t.sensor] = { min: t.optimal_min, max: t.optimal_max };
+			map[t.sensor] = {
+				min: t.optimal_min,
+				max: t.optimal_max,
+				value: t.optimal_value ?? null,
+			};
 		}
 	}
 
-	function lookup(sensorType: string): { min: number; max: number } | undefined {
+	function lookup(
+		sensorType: string,
+	): { min: number; max: number; value: number | null } | undefined {
 		const key = SENSOR_ALIAS[sensorType] ?? sensorType;
 		return map[key];
 	}

@@ -23,6 +23,8 @@ type AuditEntry = {
 	old_max: number | null;
 	new_min: number;
 	new_max: number;
+	old_value: number | null;
+	new_value: number | null;
 	changed_at: string;
 	changed_by_name: string | null;
 };
@@ -63,6 +65,10 @@ function HistoryPanel({ pondId, sensor }: { pondId: string; sensor: string }) {
 						max: <span className="text-slate-500">{e.old_max ?? '—'}</span>{' '}
 						<span className="text-cyan-400">→</span>{' '}
 						<span className="text-cyan-300 font-bold">{e.new_max}</span>
+						{'  '}·{'  '}
+						opt: <span className="text-slate-500">{e.old_value ?? '—'}</span>{' '}
+						<span className="text-cyan-400">→</span>{' '}
+						<span className="text-cyan-300 font-bold">{e.new_value ?? '—'}</span>
 					</div>
 				</div>
 			))}
@@ -88,9 +94,9 @@ export default function ThresholdSettingsPage() {
 
 	const { thresholds, lookup, mutate } = useThresholds(editorPondId);
 
-	const [draft, setDraft] = useState<Record<string, { min: string; max: string }>>(
-		{},
-	);
+	const [draft, setDraft] = useState<
+		Record<string, { min: string; max: string; value: string }>
+	>({});
 	const [openHistory, setOpenHistory] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
@@ -107,11 +113,12 @@ export default function ThresholdSettingsPage() {
 
 	useEffect(() => {
 		if (!thresholds) return;
-		const next: Record<string, { min: string; max: string }> = {};
+		const next: Record<string, { min: string; max: string; value: string }> = {};
 		for (const t of thresholds) {
 			next[t.sensor] = {
 				min: String(t.optimal_min),
 				max: String(t.optimal_max),
+				value: t.optimal_value == null ? '' : String(t.optimal_value),
 			};
 		}
 		setDraft(next);
@@ -148,6 +155,21 @@ export default function ThresholdSettingsPage() {
 			setToast({ text: 'min must be less than max.', ok: false });
 			return;
 		}
+
+		let optimalValue: number | null = null;
+		if (d.value.trim() !== '') {
+			const v = Number(d.value);
+			if (!Number.isFinite(v)) {
+				setToast({ text: 'Optimal value must be numeric.', ok: false });
+				return;
+			}
+			if (v < min || v > max) {
+				setToast({ text: 'Optimal value must be between min and max.', ok: false });
+				return;
+			}
+			optimalValue = v;
+		}
+
 		if (targetPondIds.length === 0) {
 			setToast({ text: 'No pond selected.', ok: false });
 			return;
@@ -164,6 +186,7 @@ export default function ThresholdSettingsPage() {
 					sensor,
 					optimal_min: min,
 					optimal_max: max,
+					optimal_value: optimalValue,
 				}),
 			});
 			if (!res.ok) {
@@ -331,12 +354,17 @@ export default function ThresholdSettingsPage() {
 											</p>
 											<p className="text-mono text-sm text-cyan-300 font-bold">
 												{current.min} – {current.max}
+												{current.value != null && (
+													<span className="text-slate-400 font-normal">
+														{' '}· opt {current.value}
+													</span>
+												)}
 											</p>
 										</div>
 									)}
 								</div>
 
-								<div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+								<div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
 									<div>
 										<label className="block text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400 mb-1.5">
 											Optimal Min
@@ -349,6 +377,27 @@ export default function ThresholdSettingsPage() {
 												setDraft({
 													...draft,
 													[s.key]: { ...d, min: e.target.value },
+												})
+											}
+											className={inputCls}
+										/>
+									</div>
+									<div>
+										<label className="block text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400 mb-1.5">
+											Optimal Value
+											<span className="ml-1 normal-case tracking-normal text-slate-500 font-normal">
+												(optional)
+											</span>
+										</label>
+										<input
+											type="number"
+											step="0.01"
+											value={d.value}
+											placeholder="—"
+											onChange={(e) =>
+												setDraft({
+													...draft,
+													[s.key]: { ...d, value: e.target.value },
 												})
 											}
 											className={inputCls}

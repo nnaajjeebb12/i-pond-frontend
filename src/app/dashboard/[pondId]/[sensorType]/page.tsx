@@ -214,6 +214,7 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 									isLoading={isReadingsLoading}
 									optimalMin={optimal?.min}
 									optimalMax={optimal?.max}
+									optimalValue={optimal?.value ?? null}
 									data={payload?.mode === 'raw' ? payload.data : undefined}
 									aggregated={
 										payload?.mode === 'aggregated' ? payload.data : undefined

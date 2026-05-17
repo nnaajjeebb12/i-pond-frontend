@@ -19,10 +19,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        rememberMe: { label: "Remember Me", type: "text" },
       },
       async authorize(credentials) {
         const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
+        const rememberMe = String(credentials?.rememberMe ?? "") === "true";
         if (!email || !password) return null;
 
         const { rows } = await pool.query<OwnerRow>(
@@ -44,6 +46,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          rememberMe,
         };
       },
     }),

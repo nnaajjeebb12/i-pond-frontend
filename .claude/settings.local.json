@@ -36,7 +36,11 @@
       "Bash(where soffice *)",
       "Read(//c/Program Files/LibreOffice/program/**)",
       "Bash(python -c ' *)",
-      "Bash(version\" | head -10)"
+      "Bash(version\" | head -10)",
+      "Bash(npx --no-install tsc --noEmit)",
+      "PowerShell(npx --no-install tsc --noEmit 2>&1)",
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "PowerShell(npx tsc --noEmit; echo \"EXIT=$LASTEXITCODE\")"
     ]
   }
 }

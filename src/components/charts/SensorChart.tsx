@@ -19,15 +19,24 @@ type AggregatedBucket = {
 	trend: Trend;
 };
 
+export type CompareSeries = {
+	pondId: number;
+	pondName: string;
+	color: string;
+	data: AggregatedBucket[];
+};
+
 interface Props {
-	mode: 'raw' | 'aggregated';
+	mode: 'raw' | 'aggregated' | 'compare';
 	sensor: Sensor;
 	unit: string;
 	label: string;
 	data?: RawPoint[];
 	aggregated?: AggregatedBucket[];
+	compareSeries?: CompareSeries[];
 	optimalMin?: number;
 	optimalMax?: number;
+	optimalValue?: number | null;
 	range?: RangeKey;
 	bucketSize?: string;
 	isLoading?: boolean;
@@ -48,6 +57,13 @@ const fmtHM = new Intl.DateTimeFormat('en-PH', {
 	hour12: false,
 	timeZone: TZ,
 });
+const fmtHMS = new Intl.DateTimeFormat('en-PH', {
+	hour: '2-digit',
+	minute: '2-digit',
+	second: '2-digit',
+	hour12: false,
+	timeZone: TZ,
+});
 const fmtMD = new Intl.DateTimeFormat('en-PH', {
 	month: 'short',
 	day: '2-digit',
@@ -61,11 +77,6 @@ const fmtMDHM = new Intl.DateTimeFormat('en-PH', {
 	hour12: false,
 	timeZone: TZ,
 });
-const fmtFullPH = new Intl.DateTimeFormat('en-PH', {
-	dateStyle: 'medium',
-	timeStyle: 'medium',
-	timeZone: TZ,
-});
 
 function formatTick(ts: number, range: RangeKey) {
 	const d = new Date(ts);
@@ -74,8 +85,10 @@ function formatTick(ts: number, range: RangeKey) {
 	return fmtMDHM.format(d).replace(',', '');
 }
 
-function formatFull(ts: number) {
-	return fmtFullPH.format(new Date(ts));
+function formatTooltipTime(ts: number, mode: 'raw' | 'aggregated' | 'compare') {
+	const d = new Date(ts);
+	if (mode === 'raw') return `${fmtHMS.format(d)} (PHT)`;
+	return `${fmtMDHM.format(d).replace(',', '')} (PHT)`;
 }
 
 const TREND_CONFIG: Record<
@@ -85,8 +98,7 @@ const TREND_CONFIG: Record<
 	rising: {
 		icon: '↑',
 		label: 'Rising',
-		className:
-			'bg-amber-500/10 border-amber-400/30 text-amber-300',
+		className: 'bg-amber-500/10 border-amber-400/30 text-amber-300',
 	},
 	falling: {
 		icon: '↓',
@@ -96,8 +108,7 @@ const TREND_CONFIG: Record<
 	stable: {
 		icon: '→',
 		label: 'Stable',
-		className:
-			'bg-emerald-500/10 border-emerald-400/30 text-emerald-300',
+		className: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300',
 	},
 };
 
@@ -140,6 +151,38 @@ function optimalBandPlugin(getMin: () => number | undefined, getMax: () => numbe
 					ctx.lineWidth = 1;
 					ctx.strokeRect(left, top, width, height);
 				}
+				ctx.restore();
+			},
+		},
+	};
+}
+
+function optimalValueLinePlugin(getValue: () => number | null | undefined, unit: string) {
+	return {
+		hooks: {
+			draw: (u: uPlot) => {
+				const v = getValue();
+				if (v == null || !isFinite(v)) return;
+				const ctx = u.ctx;
+				const y = u.valToPos(v, 'y', true);
+				const left = u.bbox.left;
+				const right = u.bbox.left + u.bbox.width;
+				ctx.save();
+				ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+				ctx.setLineDash([4, 4]);
+				ctx.lineWidth = 1.2;
+				ctx.beginPath();
+				ctx.moveTo(left, y);
+				ctx.lineTo(right, y);
+				ctx.stroke();
+				ctx.setLineDash([]);
+				const label = `Optimal: ${v.toFixed(2)} ${unit}`;
+				ctx.font = '11px ui-sans-serif, system-ui';
+				const w = ctx.measureText(label).width + 8;
+				ctx.fillStyle = 'rgba(15,23,42,0.85)';
+				ctx.fillRect(right - w - 4, y - 16, w, 14);
+				ctx.fillStyle = 'rgba(255,255,255,0.85)';
+				ctx.fillText(label, right - w, y - 5);
 				ctx.restore();
 			},
 		},
@@ -265,8 +308,10 @@ export default function SensorChart(props: Props) {
 		label,
 		data,
 		aggregated,
+		compareSeries,
 		optimalMin,
 		optimalMax,
+		optimalValue,
 		range = '7d',
 		bucketSize,
 		isLoading,
@@ -279,9 +324,30 @@ export default function SensorChart(props: Props) {
 		x: 0,
 		y: 0,
 	});
+	const [chartWidth, setChartWidth] = useState(600);
 	const color = SENSOR_COLOR[sensor];
 
 	const aligned = useMemo(() => {
+		if (mode === 'compare') {
+			const series = compareSeries ?? [];
+			const xsSet = new Set<number>();
+			for (const s of series) {
+				for (const b of s.data) xsSet.add(Math.floor(b.time / 1000));
+			}
+			const xs = Array.from(xsSet).sort((a, b) => a - b);
+			const xIndex = new Map<number, number>();
+			xs.forEach((x, i) => xIndex.set(x, i));
+			const pondYs: (number | null)[][] = series.map(() =>
+				new Array(xs.length).fill(null),
+			);
+			series.forEach((s, si) => {
+				for (const b of s.data) {
+					const i = xIndex.get(Math.floor(b.time / 1000));
+					if (i != null) pondYs[si][i] = b.avg;
+				}
+			});
+			return { xs, series: pondYs, counts: undefined as number[] | undefined };
+		}
 		if (mode === 'raw') {
 			const pts = data ?? [];
 			const xs: number[] = new Array(pts.length);
@@ -306,9 +372,10 @@ export default function SensorChart(props: Props) {
 			counts[i] = buckets[i].anomalyCount;
 		}
 		return { xs, series: [avg, min, max], counts };
-	}, [mode, data, aggregated]);
+	}, [mode, data, aggregated, compareSeries]);
 
 	const stats = useMemo(() => {
+		if (mode === 'compare') return null;
 		if (mode === 'raw') {
 			const pts = data ?? [];
 			if (pts.length === 0) return null;
@@ -361,36 +428,48 @@ export default function SensorChart(props: Props) {
 			plugins.unshift(minMaxBandPlugin(color));
 			plugins.push(anomalyMarkerPlugin(() => aligned.counts));
 		}
-		plugins.push(lastPointPlugin(color));
+		if (mode !== 'compare') {
+			plugins.push(lastPointPlugin(color));
+		}
+		plugins.push(optimalValueLinePlugin(() => optimalValue ?? null, unit));
 		plugins.push(
 			cursorPlugin((idx, x, y) => setCursor({ idx, x, y })),
 		);
 
 		const showDots = mode === 'raw' && range === 'today';
-		const series: uPlot.Series[] =
-			mode === 'raw'
-				? [
-						{},
-						{
-							label,
-							stroke: color,
-							width: 2,
-							points: showDots
-								? { show: true, size: 6, fill: color, stroke: '#fff' }
-								: { show: false },
-						},
-					]
-				: [
-						{},
-						{
-							label: 'avg',
-							stroke: color,
-							width: 2,
-							points: { show: false },
-						},
-						{ label: 'min', stroke: 'transparent', points: { show: false } },
-						{ label: 'max', stroke: 'transparent', points: { show: false } },
-					];
+
+		let series: uPlot.Series[];
+		if (mode === 'compare') {
+			const compare = compareSeries ?? [];
+			series = [
+				{},
+				...compare.map((s) => ({
+					label: s.pondName,
+					stroke: s.color,
+					width: 2,
+					points: { show: false },
+				})),
+			];
+		} else if (mode === 'raw') {
+			series = [
+				{},
+				{
+					label,
+					stroke: color,
+					width: 2,
+					points: showDots
+						? { show: true, size: 6, fill: color, stroke: '#fff' }
+						: { show: false },
+				},
+			];
+		} else {
+			series = [
+				{},
+				{ label: 'avg', stroke: color, width: 2, points: { show: false } },
+				{ label: 'min', stroke: 'transparent', points: { show: false } },
+				{ label: 'max', stroke: 'transparent', points: { show: false } },
+			];
+		}
 
 		const opts: uPlot.Options = {
 			width: el.clientWidth || 600,
@@ -424,10 +503,13 @@ export default function SensorChart(props: Props) {
 
 		const u = new uPlot(opts, [aligned.xs, ...aligned.series] as uPlot.AlignedData, el);
 		plotRef.current = u;
+		setChartWidth(el.clientWidth || 600);
 
 		const ro = new ResizeObserver(() => {
 			if (!plotRef.current || !wrapRef.current) return;
-			plotRef.current.setSize({ width: wrapRef.current.clientWidth, height: 280 });
+			const w = wrapRef.current.clientWidth;
+			plotRef.current.setSize({ width: w, height: 280 });
+			setChartWidth(w);
 		});
 		ro.observe(el);
 
@@ -436,7 +518,7 @@ export default function SensorChart(props: Props) {
 			u.destroy();
 			plotRef.current = null;
 		};
-	}, [mode, sensor, label, color, range, optimalMin, optimalMax, aligned]);
+	}, [mode, sensor, label, color, range, optimalMin, optimalMax, optimalValue, unit, aligned, compareSeries]);
 
 	const trend: Trend | null =
 		mode === 'aggregated' ? bucketsTrend(aggregated ?? []) : null;
@@ -445,6 +527,21 @@ export default function SensorChart(props: Props) {
 	const hover = (() => {
 		const idx = cursor.idx;
 		if (idx == null) return null;
+		if (mode === 'compare') {
+			const ts = aligned.xs[idx];
+			if (ts == null) return null;
+			const compare = compareSeries ?? [];
+			const lines = compare
+				.map((s, si) => {
+					const v = aligned.series[si]?.[idx];
+					return v == null
+						? null
+						: { k: s.pondName, v: v as number, color: s.color };
+				})
+				.filter((x): x is { k: string; v: number; color: string } => x !== null);
+			if (lines.length === 0) return null;
+			return { time: ts * 1000, value: lines[0].v, lines };
+		}
 		if (mode === 'raw') {
 			const p = (data ?? [])[idx];
 			if (!p) return null;
@@ -480,10 +577,13 @@ export default function SensorChart(props: Props) {
 
 	const empty =
 		(mode === 'raw' && (!data || data.length === 0)) ||
-		(mode === 'aggregated' && (!aggregated || aggregated.length === 0));
+		(mode === 'aggregated' && (!aggregated || aggregated.length === 0)) ||
+		(mode === 'compare' && (!compareSeries || compareSeries.every((s) => s.data.length === 0)));
 
 	const waitingForData =
 		mode === 'raw' && range === 'today' && (data?.length ?? 0) === 0;
+
+	const tooltipWidth = mode === 'compare' ? 220 : 170;
 
 	return (
 		<div className="rounded-xl border border-[var(--border)] bg-linear-to-br from-[rgba(20,28,51,0.85)] to-[rgba(15,23,42,0.85)] backdrop-blur-sm p-5 shadow-[0_4px_30px_-12px_rgba(0,0,0,0.5)]">
@@ -491,15 +591,17 @@ export default function SensorChart(props: Props) {
 				<div>
 					<h3 className="text-base font-semibold text-slate-100">{label}</h3>
 					<p className="text-[11px] text-slate-500 mt-0.5 font-mono uppercase tracking-wider">
-						{mode === 'aggregated' && bucketSize
-							? `aggregated · bucket ${bucketSize}`
-							: `raw · ${stats?.count ?? 0} pts`}
+						{mode === 'compare'
+							? `compare · ${compareSeries?.length ?? 0} ponds${bucketSize ? ` · bucket ${bucketSize}` : ''}`
+							: mode === 'aggregated' && bucketSize
+								? `aggregated · bucket ${bucketSize}`
+								: `raw · ${stats?.count ?? 0} pts`}
 					</p>
 				</div>
 				{trend && <TrendBadge trend={trend} />}
 			</div>
 
-			{stats && (
+			{stats && mode !== 'compare' && (
 				<div className="grid grid-cols-4 gap-2 mb-3">
 					<StatCell
 						label="now"
@@ -533,12 +635,15 @@ export default function SensorChart(props: Props) {
 							background: 'rgba(10, 15, 31, 0.92)',
 							border: `1px solid ${color}66`,
 							boxShadow: `0 8px 30px -8px ${color}40, 0 0 0 1px ${color}30`,
-							left: Math.min(Math.max(cursor.x + 12, 8), 600 - 160),
+							left: Math.min(
+								Math.max(cursor.x + 12, 8),
+								Math.max(chartWidth - tooltipWidth - 8, 8),
+							),
 							top: Math.max(cursor.y - 60, 4),
-							minWidth: 150,
+							minWidth: tooltipWidth - 20,
 						}}>
 						<div className="font-semibold text-slate-200 mb-1.5 text-[11px]">
-							{formatFull(hover.time)}
+							Time: {formatTooltipTime(hover.time, mode)}
 						</div>
 						{hover.lines.map((l) => (
 							<div
@@ -570,20 +675,38 @@ export default function SensorChart(props: Props) {
 
 			<div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5 text-xs flex-wrap gap-2">
 				<div className="flex items-center gap-3 flex-wrap">
-					<LegendDot color={color} label={mode === 'aggregated' ? 'avg' : label} solid />
-					{mode === 'aggregated' && (
-						<LegendDot color={color} label="min–max range" band />
-					)}
-					{optimalMin != null && optimalMax != null && (
-						<LegendDot
-							color="#22c55e"
-							label={`optimal ${optimalMin}–${optimalMax} ${unit}`}
-							dashed={mode === 'aggregated'}
-							band={mode === 'raw'}
-						/>
-					)}
-					{mode === 'aggregated' && stats && 'anomalyCount' in stats && (stats.anomalyCount ?? 0) > 0 && (
-						<LegendDot color="#ef4444" label={`${stats.anomalyCount} anomalies`} solid />
+					{mode === 'compare' ? (
+						(compareSeries ?? []).map((s) => (
+							<LegendDot key={s.pondId} color={s.color} label={s.pondName} solid />
+						))
+					) : (
+						<>
+							<LegendDot color={color} label={mode === 'aggregated' ? 'avg' : label} solid />
+							{mode === 'aggregated' && (
+								<LegendDot color={color} label="min–max range" band />
+							)}
+							{optimalMin != null && optimalMax != null && (
+								<LegendDot
+									color="#22c55e"
+									label={`optimal ${optimalMin}–${optimalMax} ${unit}`}
+									dashed={mode === 'aggregated'}
+									band={mode === 'raw'}
+								/>
+							)}
+							{optimalValue != null && (
+								<LegendDot
+									color="#ffffff"
+									label={`optimal ${optimalValue} ${unit}`}
+									dashed
+								/>
+							)}
+							{mode === 'aggregated' &&
+								stats &&
+								'anomalyCount' in stats &&
+								(stats.anomalyCount ?? 0) > 0 && (
+									<LegendDot color="#ef4444" label={`${stats.anomalyCount} anomalies`} solid />
+								)}
+						</>
 					)}
 				</div>
 				<span className="text-slate-500">hover chart for details</span>
@@ -626,7 +749,7 @@ function StatCell({
 function LegendDot({
 	color,
 	label,
-	solid,
+	solid: _solid,
 	dashed,
 	band,
 }: {

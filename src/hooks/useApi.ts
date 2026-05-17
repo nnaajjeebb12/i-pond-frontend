@@ -328,6 +328,55 @@ export function useAllPondsReadings(sensorType: string, range: Range = '7d') {
 	return { payload, readings, isLoading, error };
 }
 
+export function useMultiPondReadings(
+	sensorType: string,
+	range: Range,
+	pondIds: string[] | 'all',
+) {
+	const param = SENSOR_PARAM[sensorType];
+	const visible = useTabVisible();
+	const pondsKey = pondIds === 'all' ? 'all' : [...pondIds].sort().join(',');
+	const enabled = !!param && (pondIds === 'all' || pondIds.length > 0);
+	const url = enabled
+		? `/api/readings?sensor=${param}&range=${range}&ponds=${encodeURIComponent(pondsKey)}`
+		: null;
+	const { data, error, isLoading } = useSWR<ReadingsPayload>(url, jsonFetcher, {
+		...swrConfig,
+		refreshInterval: visible ? 10_000 : 0,
+	});
+	return { payload: data, isLoading, error };
+}
+
+export type ComparePondSeries = {
+	pondId: number;
+	pondName: string;
+	data: AggregatedBucket[];
+};
+
+export type CompareReadingsPayload = {
+	bucketSize: string;
+	series: ComparePondSeries[];
+};
+
+export function useCompareReadings(
+	sensorType: string,
+	range: Range,
+	pondIds: string[] | 'all',
+) {
+	const param = SENSOR_PARAM[sensorType];
+	const visible = useTabVisible();
+	const pondsKey = pondIds === 'all' ? 'all' : [...pondIds].sort().join(',');
+	const enabled = !!param && (pondIds === 'all' || pondIds.length > 0);
+	const url = enabled
+		? `/api/readings/compare?sensor=${param}&range=${range}&ponds=${encodeURIComponent(pondsKey)}`
+		: null;
+	const { data, error, isLoading } = useSWR<CompareReadingsPayload>(url, jsonFetcher, {
+		...swrConfig,
+		refreshInterval: visible ? 10_000 : 0,
+	});
+	return { payload: data, isLoading, error };
+}
+
 function useLatestPayload(pondId: string) {
 	const url = pondId
 		? `/api/readings/latest?pond=${encodeURIComponent(pondId)}`

@@ -44,6 +44,18 @@ async function ownsPond(userId: string, pondId: number): Promise<"yes" | "no" | 
   return rows.length > 0 ? "yes" : "no";
 }
 
+async function resolveAccessiblePondIds(userId: string, isAdmin: boolean): Promise<number[]> {
+  if (isAdmin) {
+    const { rows } = await pool.query<{ id: number }>(`SELECT id FROM ponds ORDER BY id`);
+    return rows.map((r) => r.id);
+  }
+  const { rows } = await pool.query<{ pond_id: number }>(
+    `SELECT pond_id FROM user_pond_access WHERE user_id = $1 ORDER BY pond_id`,
+    [userId]
+  );
+  return rows.map((r) => r.pond_id);
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) {
@@ -54,6 +66,7 @@ export async function GET(req: NextRequest) {
   const sensorParam = (url.searchParams.get("sensor") ?? "").toLowerCase();
   const rangeParam = (url.searchParams.get("range") ?? "7d").toLowerCase() as Range;
   const pondParam = url.searchParams.get("pond");
+  const pondsParam = url.searchParams.get("ponds");
   const sinceParam = url.searchParams.get("since");
 
   const column = SENSOR_COLUMNS[sensorParam];
@@ -75,7 +88,11 @@ export async function GET(req: NextRequest) {
 
   const isAdmin = session.user.role === "admin";
 
+  // Resolve target ponds.
+  // Precedence: pond (single, legacy) > ponds (list/all) > default (all accessible).
   let pondId: number | null = null;
+  let pondIds: number[] | null = null;
+
   if (pondParam !== null) {
     pondId = Number(pondParam);
     if (!Number.isFinite(pondId)) {
@@ -85,6 +102,24 @@ export async function GET(req: NextRequest) {
       const own = await ownsPond(session.user.id, pondId);
       if (own === "missing") return NextResponse.json({ error: "not_found" }, { status: 404 });
       if (own === "no") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  } else if (pondsParam !== null && pondsParam !== "all") {
+    const ids = pondsParam
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n));
+    if (ids.length === 0) {
+      return NextResponse.json({ error: "invalid_ponds" }, { status: 400 });
+    }
+    const accessible = new Set(await resolveAccessiblePondIds(session.user.id, isAdmin));
+    const denied = ids.filter((id) => !accessible.has(id));
+    if (denied.length > 0) {
+      return NextResponse.json({ error: "forbidden", ponds: denied }, { status: 403 });
+    }
+    pondIds = ids;
+    if (ids.length === 1) {
+      pondId = ids[0];
+      pondIds = null;
     }
   }
 
@@ -116,25 +151,35 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // No pond: avg across visible ponds, 5-minute buckets for today.
-      const sql = isAdmin
-        ? `SELECT (time_bucket('15 minutes', time AT TIME ZONE $1) AT TIME ZONE $1) AS bucket,
-                  ROUND(AVG(${column})::numeric, 2)::float8 AS value
-             FROM sensor_readings
-            WHERE time >= date_trunc('day', NOW() AT TIME ZONE $1) AT TIME ZONE $1
-            GROUP BY bucket
-            ORDER BY bucket ASC
-            LIMIT 5000`
-        : `SELECT (time_bucket('15 minutes', sr.time AT TIME ZONE $1) AT TIME ZONE $1) AS bucket,
-                  AVG(sr.${column})::float8 AS value
+      // Multi-pond or all: 15-minute buckets, avg across selected ponds.
+      const idsFilter = pondIds ?? null;
+      const sql = idsFilter
+        ? `SELECT (time_bucket('15 minutes', sr.time AT TIME ZONE $1) AT TIME ZONE $1) AS bucket,
+                  ROUND(AVG(sr.${column})::numeric, 2)::float8 AS value
              FROM sensor_readings sr
-             JOIN user_pond_access upa ON upa.pond_id = sr.pond_id
-            WHERE upa.user_id = $2
+            WHERE sr.pond_id = ANY($2::int[])
               AND sr.time >= date_trunc('day', NOW() AT TIME ZONE $1) AT TIME ZONE $1
             GROUP BY bucket
             ORDER BY bucket ASC
-            LIMIT 5000`;
-      const params = isAdmin ? [TZ] : [TZ, session.user.id];
+            LIMIT 5000`
+        : isAdmin
+          ? `SELECT (time_bucket('15 minutes', time AT TIME ZONE $1) AT TIME ZONE $1) AS bucket,
+                    ROUND(AVG(${column})::numeric, 2)::float8 AS value
+               FROM sensor_readings
+              WHERE time >= date_trunc('day', NOW() AT TIME ZONE $1) AT TIME ZONE $1
+              GROUP BY bucket
+              ORDER BY bucket ASC
+              LIMIT 5000`
+          : `SELECT (time_bucket('15 minutes', sr.time AT TIME ZONE $1) AT TIME ZONE $1) AS bucket,
+                    AVG(sr.${column})::float8 AS value
+               FROM sensor_readings sr
+               JOIN user_pond_access upa ON upa.pond_id = sr.pond_id
+              WHERE upa.user_id = $2
+                AND sr.time >= date_trunc('day', NOW() AT TIME ZONE $1) AT TIME ZONE $1
+              GROUP BY bucket
+              ORDER BY bucket ASC
+              LIMIT 5000`;
+      const params = idsFilter ? [TZ, idsFilter] : isAdmin ? [TZ] : [TZ, session.user.id];
       const { rows } = await pool.query<{ bucket: Date; value: number | null }>(sql, params);
       return NextResponse.json({
         mode: "raw",
@@ -194,8 +239,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // No pond: cross-pond average. Anomaly count uses each row's own pond threshold via JOIN.
-    const sql = isAdmin
+    // Multi-pond aggregated.
+    const idsFilter = pondIds ?? null;
+    const sql = idsFilter
       ? `SELECT (time_bucket($1::interval, sr.time AT TIME ZONE $4) AT TIME ZONE $4) AS bucket,
                 ROUND(AVG(sr.${column})::numeric, 2)::float8 AS avg,
                 ROUND(MIN(sr.${column})::numeric, 2)::float8 AS min,
@@ -208,31 +254,51 @@ export async function GET(req: NextRequest) {
            LEFT JOIN pond_sensor_thresholds pst
              ON pst.pond_id = sr.pond_id
             AND pst.sensor  = $2
-          WHERE sr.time >= NOW() - $3::interval
+          WHERE sr.pond_id = ANY($5::int[])
+            AND sr.time >= NOW() - $3::interval
           GROUP BY bucket
           ORDER BY bucket ASC
           LIMIT 2000`
-      : `SELECT (time_bucket($1::interval, sr.time AT TIME ZONE $5) AT TIME ZONE $5) AS bucket,
-                ROUND(AVG(sr.${column})::numeric, 2)::float8 AS avg,
-                ROUND(MIN(sr.${column})::numeric, 2)::float8 AS min,
-                ROUND(MAX(sr.${column})::numeric, 2)::float8 AS max,
-                COUNT(*) FILTER (
-                  WHERE sr.${column} < pst.optimal_min
-                     OR sr.${column} > pst.optimal_max
-                ) AS anomaly_count
-           FROM sensor_readings sr
-           JOIN user_pond_access upa ON upa.pond_id = sr.pond_id
-           LEFT JOIN pond_sensor_thresholds pst
-             ON pst.pond_id = sr.pond_id
-            AND pst.sensor  = $2
-          WHERE upa.user_id = $3
-            AND sr.time >= NOW() - $4::interval
-          GROUP BY bucket
-          ORDER BY bucket ASC
-          LIMIT 2000`;
-    const params = isAdmin
-      ? [cfg.bucket, column, cfg.interval, TZ]
-      : [cfg.bucket, column, session.user.id, cfg.interval, TZ];
+      : isAdmin
+        ? `SELECT (time_bucket($1::interval, sr.time AT TIME ZONE $4) AT TIME ZONE $4) AS bucket,
+                  ROUND(AVG(sr.${column})::numeric, 2)::float8 AS avg,
+                  ROUND(MIN(sr.${column})::numeric, 2)::float8 AS min,
+                  ROUND(MAX(sr.${column})::numeric, 2)::float8 AS max,
+                  COUNT(*) FILTER (
+                    WHERE sr.${column} < pst.optimal_min
+                       OR sr.${column} > pst.optimal_max
+                  ) AS anomaly_count
+             FROM sensor_readings sr
+             LEFT JOIN pond_sensor_thresholds pst
+               ON pst.pond_id = sr.pond_id
+              AND pst.sensor  = $2
+            WHERE sr.time >= NOW() - $3::interval
+            GROUP BY bucket
+            ORDER BY bucket ASC
+            LIMIT 2000`
+        : `SELECT (time_bucket($1::interval, sr.time AT TIME ZONE $5) AT TIME ZONE $5) AS bucket,
+                  ROUND(AVG(sr.${column})::numeric, 2)::float8 AS avg,
+                  ROUND(MIN(sr.${column})::numeric, 2)::float8 AS min,
+                  ROUND(MAX(sr.${column})::numeric, 2)::float8 AS max,
+                  COUNT(*) FILTER (
+                    WHERE sr.${column} < pst.optimal_min
+                       OR sr.${column} > pst.optimal_max
+                  ) AS anomaly_count
+             FROM sensor_readings sr
+             JOIN user_pond_access upa ON upa.pond_id = sr.pond_id
+             LEFT JOIN pond_sensor_thresholds pst
+               ON pst.pond_id = sr.pond_id
+              AND pst.sensor  = $2
+            WHERE upa.user_id = $3
+              AND sr.time >= NOW() - $4::interval
+            GROUP BY bucket
+            ORDER BY bucket ASC
+            LIMIT 2000`;
+    const params = idsFilter
+      ? [cfg.bucket, column, cfg.interval, TZ, idsFilter]
+      : isAdmin
+        ? [cfg.bucket, column, cfg.interval, TZ]
+        : [cfg.bucket, column, session.user.id, cfg.interval, TZ];
 
     const { rows } = await pool.query<{
       bucket: Date;
