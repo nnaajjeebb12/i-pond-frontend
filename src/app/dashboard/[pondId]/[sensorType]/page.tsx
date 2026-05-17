@@ -6,7 +6,7 @@ import SensorCard from '@/components/SensorCard';
 import SensorChart from '@/components/charts/SensorChart';
 import { usePond, useSensorReadings, type Range } from '@/hooks/useApi';
 import { useThresholds } from '@/hooks/useThresholds';
-import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 
@@ -27,7 +27,7 @@ const SENSOR_CONFIGS: Record<
 export default function SensorDetailPage({ params }: SensorDetailProps) {
 	const { pondId, sensorType } = use(params);
 	const router = useRouter();
-	const { isAuthenticated } = useAuthStore();
+	const { status: sessionStatus } = useSession();
 	const { pond, isLoading: isPondLoading } = usePond(pondId);
 	const { lookup } = useThresholds(pondId);
 	const optimal = lookup(sensorType);
@@ -50,10 +50,17 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 	];
 
 	useEffect(() => {
-		if (!isAuthenticated) router.push('/login');
-	}, [isAuthenticated, router]);
+		if (sessionStatus === 'unauthenticated') router.replace('/login');
+	}, [sessionStatus, router]);
 
-	if (!isAuthenticated) return null;
+	if (sessionStatus === 'loading') {
+		return (
+			<MainLayout>
+				<LoadingSpinner />
+			</MainLayout>
+		);
+	}
+	if (sessionStatus === 'unauthenticated') return null;
 
 	const config = SENSOR_CONFIGS[sensorType];
 	if (!config)

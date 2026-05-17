@@ -107,9 +107,7 @@ export async function GET(req: NextRequest) {
               ORDER BY time ASC
               LIMIT 5000`;
         const params = useSince ? [pondId, sinceMs] : [pondId, TZ];
-        console.log("readings range:", rangeParam, "tz:", TZ, "pond:", pondId, "since:", sinceMs);
         const { rows } = await pool.query<{ time: Date; value: number | null }>(sql, params);
-        console.log("readings row count:", rows.length);
         return NextResponse.json({
           mode: "raw",
           data: rows
@@ -137,9 +135,7 @@ export async function GET(req: NextRequest) {
             ORDER BY bucket ASC
             LIMIT 5000`;
       const params = isAdmin ? [TZ] : [TZ, session.user.id];
-      console.log("readings range:", rangeParam, "tz:", TZ, "bucket: 15 minutes");
       const { rows } = await pool.query<{ bucket: Date; value: number | null }>(sql, params);
-      console.log("readings row count:", rows.length);
       return NextResponse.json({
         mode: "raw",
         data: rows
@@ -150,7 +146,6 @@ export async function GET(req: NextRequest) {
 
     // ---------- 7d / 14d / 30d / 1y (aggregated) ----------
     const cfg = RANGE_BUCKETS[rangeParam];
-    console.log("readings range:", rangeParam, "bucket:", cfg.bucket, "interval:", cfg.interval, "tz:", TZ);
 
     if (pondId !== null) {
       const { rows } = await pool.query<{
@@ -172,7 +167,7 @@ export async function GET(req: NextRequest) {
             ) AS anomaly_count,
             REGR_SLOPE(sr.${column}, EXTRACT(EPOCH FROM sr.time)) AS trend_slope
            FROM sensor_readings sr
-           JOIN pond_sensor_thresholds pst
+           LEFT JOIN pond_sensor_thresholds pst
              ON pst.pond_id = sr.pond_id
             AND pst.sensor  = $2
           WHERE sr.pond_id = $3
@@ -183,7 +178,6 @@ export async function GET(req: NextRequest) {
         [cfg.bucket, column, pondId, cfg.interval, TZ]
       );
 
-      console.log("readings row count:", rows.length);
       return NextResponse.json({
         mode: "aggregated",
         bucketSize: cfg.label,
@@ -211,7 +205,7 @@ export async function GET(req: NextRequest) {
                      OR sr.${column} > pst.optimal_max
                 ) AS anomaly_count
            FROM sensor_readings sr
-           JOIN pond_sensor_thresholds pst
+           LEFT JOIN pond_sensor_thresholds pst
              ON pst.pond_id = sr.pond_id
             AND pst.sensor  = $2
           WHERE sr.time >= NOW() - $3::interval
@@ -228,7 +222,7 @@ export async function GET(req: NextRequest) {
                 ) AS anomaly_count
            FROM sensor_readings sr
            JOIN user_pond_access upa ON upa.pond_id = sr.pond_id
-           JOIN pond_sensor_thresholds pst
+           LEFT JOIN pond_sensor_thresholds pst
              ON pst.pond_id = sr.pond_id
             AND pst.sensor  = $2
           WHERE upa.user_id = $3
@@ -248,7 +242,6 @@ export async function GET(req: NextRequest) {
       anomaly_count: string;
     }>(sql, params);
 
-    console.log("readings row count:", rows.length);
     return NextResponse.json({
       mode: "aggregated",
       bucketSize: cfg.label,

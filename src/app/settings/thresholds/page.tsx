@@ -5,6 +5,7 @@ import MainLayout from '@/components/MainLayout';
 import { usePonds } from '@/hooks/useApi';
 import { useThresholds } from '@/hooks/useThresholds';
 import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
@@ -71,7 +72,8 @@ function HistoryPanel({ pondId, sensor }: { pondId: string; sensor: string }) {
 
 export default function ThresholdSettingsPage() {
 	const router = useRouter();
-	const { isAuthenticated, user } = useAuthStore();
+	const { status: sessionStatus } = useSession();
+	const { user } = useAuthStore();
 	const { ponds, isLoading: pondsLoading } = usePonds();
 
 	const [scopeMode, setScopeMode] = useState<'single' | 'multi' | 'all'>('single');
@@ -94,8 +96,8 @@ export default function ThresholdSettingsPage() {
 	const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
 
 	useEffect(() => {
-		if (!isAuthenticated) router.push('/login');
-	}, [isAuthenticated, router]);
+		if (sessionStatus === 'unauthenticated') router.replace('/login');
+	}, [sessionStatus, router]);
 
 	useEffect(() => {
 		if (ponds && ponds.length > 0 && !singlePond) {
@@ -115,7 +117,14 @@ export default function ThresholdSettingsPage() {
 		setDraft(next);
 	}, [thresholds]);
 
-	if (!isAuthenticated) return null;
+	if (sessionStatus === 'loading') {
+		return (
+			<MainLayout>
+				<LoadingSpinner />
+			</MainLayout>
+		);
+	}
+	if (sessionStatus === 'unauthenticated') return null;
 
 	const targetPondIds: string[] =
 		scopeMode === 'single'

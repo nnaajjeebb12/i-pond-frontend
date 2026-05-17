@@ -31,6 +31,8 @@ export function ErrorMessage({ message }: ErrorMessageProps) {
 	);
 }
 
+import Link from 'next/link';
+
 interface BackButtonProps {
 	href?: string;
 	label?: string;
@@ -41,7 +43,7 @@ export function BackButton({
 	label = '← Back',
 }: BackButtonProps) {
 	return (
-		<a
+		<Link
 			href={href}
 			className="inline-flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 text-sm font-medium mb-4 transition-colors group">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 transition-transform group-hover:-translate-x-0.5">
@@ -49,6 +51,6 @@ export function BackButton({
 				<polyline points="12 19 5 12 12 5" />
 			</svg>
 			<span>{label.replace(/^←\s*/, '')}</span>
-		</a>
+		</Link>
 	);
 }

@@ -483,7 +483,7 @@ export default function SensorChart(props: Props) {
 		(mode === 'aggregated' && (!aggregated || aggregated.length === 0));
 
 	const waitingForData =
-		mode === 'raw' && range === 'today' && (data?.length ?? 0) > 0 && (data?.length ?? 0) < 10;
+		mode === 'raw' && range === 'today' && (data?.length ?? 0) === 0;
 
 	return (
 		<div className="rounded-xl border border-[var(--border)] bg-linear-to-br from-[rgba(20,28,51,0.85)] to-[rgba(15,23,42,0.85)] backdrop-blur-sm p-5 shadow-[0_4px_30px_-12px_rgba(0,0,0,0.5)]">
@@ -516,13 +516,13 @@ export default function SensorChart(props: Props) {
 
 			<div className="relative">
 				<div ref={wrapRef} className="w-full" style={{ minHeight: 280 }} />
-				{empty && (
-					<div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+				{empty && !waitingForData && (
+					<div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-sm">
 						no data
 					</div>
 				)}
 				{waitingForData && (
-					<div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-sm pointer-events-none bg-[rgba(15,23,42,0.7)]">
+					<div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-sm pointer-events-none bg-[var(--bg-card-2)]">
 						<p>Waiting for data — readings arrive every 15 minutes</p>
 					</div>
 				)}

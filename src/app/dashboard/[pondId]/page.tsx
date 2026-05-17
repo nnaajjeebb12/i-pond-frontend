@@ -6,7 +6,7 @@ import SensorCard from '@/components/SensorCard';
 import { useLatestReading, usePond } from '@/hooks/useApi';
 import { usePondStatuses } from '@/hooks/useDashboardStats';
 import { useThresholds } from '@/hooks/useThresholds';
-import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import { STATUS_DOT_BG, STATUS_DOT_GLOW, STATUS_LABEL } from '@/lib/pondStatus';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -26,17 +26,24 @@ const SENSOR_CONFIG = [
 export default function PondDashboardPage({ params }: PondDashboardProps) {
 	const { pondId } = use(params);
 	const router = useRouter();
-	const { isAuthenticated } = useAuthStore();
+	const { status: sessionStatus } = useSession();
 	const { pond, isLoading: isPondLoading, error: pondError } = usePond(pondId);
 	const { byId: statusByPondId } = usePondStatuses();
 	const status = statusByPondId.get(pondId);
 	const { lookup } = useThresholds(pondId);
 
 	useEffect(() => {
-		if (!isAuthenticated) router.push('/login');
-	}, [isAuthenticated, router]);
+		if (sessionStatus === 'unauthenticated') router.replace('/login');
+	}, [sessionStatus, router]);
 
-	if (!isAuthenticated) return null;
+	if (sessionStatus === 'loading') {
+		return (
+			<MainLayout>
+				<LoadingSpinner />
+			</MainLayout>
+		);
+	}
+	if (sessionStatus === 'unauthenticated') return null;
 	if (pondError)
 		return (
 			<MainLayout>

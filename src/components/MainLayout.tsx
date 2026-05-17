@@ -7,7 +7,7 @@ import { useSystemHealth } from '@/hooks/useSystemHealth';
 import { useUnreadCount } from '@/hooks/useAlerts';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 
 interface LayoutProps {
 	children: ReactNode;
@@ -106,6 +106,17 @@ export default function MainLayout({ children }: LayoutProps) {
 	const { user, logout } = useAuthStore();
 	const health = useSystemHealth();
 	const unread = useUnreadCount();
+	const [drawerOpen, setDrawerOpen] = useState(false);
+
+	useEffect(() => {
+		setDrawerOpen(false);
+	}, [pathname]);
+
+	useEffect(() => {
+		if (drawerOpen) document.body.style.overflow = 'hidden';
+		else document.body.style.overflow = '';
+		return () => { document.body.style.overflow = ''; };
+	}, [drawerOpen]);
 
 	if (pathname === '/login') {
 		return <>{children}</>;
@@ -149,113 +160,172 @@ export default function MainLayout({ children }: LayoutProps) {
 		.join('')
 		.toUpperCase();
 
-	return (
-		<div className="flex h-screen bg-transparent text-slate-100">
-			<aside className="w-72 shrink-0 relative border-r border-[var(--border)] bg-[rgba(10,15,31,0.7)] backdrop-blur-xl flex flex-col">
-				<div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-cyan-400/30 to-transparent pointer-events-none" />
+	const SidebarContent = (
+		<>
+			<div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-cyan-400/30 to-transparent pointer-events-none" />
 
-				<div className="px-6 pt-6 pb-5 border-b border-[var(--border)]">
-					<div className="flex items-center gap-3">
-						<div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/30 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center">
-							<svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-								<path d="M12 2.5C8 8 5 11 5 14.5a7 7 0 0 0 14 0c0-3.5-3-6.5-7-12Z" />
-							</svg>
-							<span
-								className={`absolute -top-1 -right-1 inline-block w-2 h-2 rounded-full ${HEALTH_STYLES[health.state].dot} ${health.state === 'live' ? 'animate-[pulse-dot_1.6s_ease-in-out_infinite]' : ''}`}
-							/>
-						</div>
-						<div>
-							<h1 className="text-lg font-bold tracking-tight text-white">See ME</h1>
-							<p className="text-[11px] text-slate-400 -mt-0.5">Aquaculture Control</p>
-						</div>
-					</div>
-					<div
-						title={health.detail}
-						className={`mt-4 flex items-center gap-2 px-2.5 py-1.5 rounded-md border w-fit ${HEALTH_STYLES[health.state].bg} ${HEALTH_STYLES[health.state].border}`}>
+			<div className="px-6 pt-6 pb-5 border-b border-[var(--border)]">
+				<div className="flex items-center gap-3">
+					<div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/30 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center">
+						<svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+							<path d="M12 2.5C8 8 5 11 5 14.5a7 7 0 0 0 14 0c0-3.5-3-6.5-7-12Z" />
+						</svg>
 						<span
-							className={`inline-block w-2 h-2 rounded-full ${HEALTH_STYLES[health.state].dot} ${health.state === 'live' ? 'animate-[pulse-dot_1.6s_ease-in-out_infinite]' : ''}`}
+							className={`absolute -top-1 -right-1 inline-block w-2 h-2 rounded-full ${HEALTH_STYLES[health.state].dot} ${health.state === 'live' ? 'animate-[pulse-dot_1.6s_ease-in-out_infinite]' : ''}`}
 						/>
-						<span
-							className={`text-[11px] font-semibold tracking-wide ${HEALTH_STYLES[health.state].text}`}>
-							{health.label}
-						</span>
 					</div>
-					<p className="mt-1.5 text-[10px] text-slate-500 font-mono truncate">
-						{health.detail}
-					</p>
+					<div>
+						<h1 className="text-lg font-bold tracking-tight text-white">See ME</h1>
+						<p className="text-[11px] text-slate-400 -mt-0.5">Aquaculture Control</p>
+					</div>
 				</div>
+				<div
+					title={health.detail}
+					className={`mt-4 flex items-center gap-2 px-2.5 py-1.5 rounded-md border w-fit ${HEALTH_STYLES[health.state].bg} ${HEALTH_STYLES[health.state].border}`}>
+					<span
+						className={`inline-block w-2 h-2 rounded-full ${HEALTH_STYLES[health.state].dot} ${health.state === 'live' ? 'animate-[pulse-dot_1.6s_ease-in-out_infinite]' : ''}`}
+					/>
+					<span
+						className={`text-[11px] font-semibold tracking-wide ${HEALTH_STYLES[health.state].text}`}>
+						{health.label}
+					</span>
+				</div>
+				<p className="mt-1.5 text-[10px] text-slate-500 font-mono truncate">
+					{health.detail}
+				</p>
+			</div>
 
-				<nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
-					<p className="px-3 pb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold">
-						Navigation
-					</p>
-					{navItems.map((item) => {
-						const active =
-							pathname === item.href ||
-							(item.href !== '/dashboard' && pathname?.startsWith(item.href));
-						return (
-							<Link
-								key={item.href}
-								href={item.href}
-								className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-									active
-										? 'bg-gradient-to-r from-cyan-500/15 to-transparent text-cyan-300 border border-cyan-400/30'
-										: 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
-								}`}>
-								{active && (
-									<span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
-								)}
-								<span className={active ? 'text-cyan-300' : 'text-slate-500 group-hover:text-slate-200'}>
-									{ICONS[item.icon]}
+			<nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
+				<p className="px-3 pb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500 font-semibold">
+					Navigation
+				</p>
+				{navItems.map((item) => {
+					const active =
+						pathname === item.href ||
+						(item.href !== '/dashboard' && pathname?.startsWith(item.href));
+					return (
+						<Link
+							key={item.href}
+							href={item.href}
+							className={`group relative flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium transition-all ${
+								active
+									? 'bg-gradient-to-r from-cyan-500/15 to-transparent text-cyan-300 border border-cyan-400/30'
+									: 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
+							}`}>
+							{active && (
+								<span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)]" />
+							)}
+							<span className={active ? 'text-cyan-300' : 'text-slate-500 group-hover:text-slate-200'}>
+								{ICONS[item.icon]}
+							</span>
+							<span className="flex-1">{item.label}</span>
+							{item.badge !== undefined && item.badge > 0 && (
+								<span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full text-[10px] font-bold bg-rose-500/25 text-rose-200 border border-rose-400/40">
+									{item.badge > 99 ? '99+' : item.badge}
 								</span>
-								<span className="flex-1">{item.label}</span>
-								{item.badge !== undefined && item.badge > 0 && (
-									<span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full text-[10px] font-bold bg-rose-500/25 text-rose-200 border border-rose-400/40">
-										{item.badge > 99 ? '99+' : item.badge}
-									</span>
-								)}
-							</Link>
-						);
-					})}
-				</nav>
+							)}
+						</Link>
+					);
+				})}
+			</nav>
 
-				<div className="border-t border-[var(--border)] p-4">
-					<div className="flex items-center gap-3 mb-3">
-						<div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500/30 to-violet-500/30 border border-cyan-400/30 flex items-center justify-center text-xs font-bold text-cyan-200">
-							{initials}
-						</div>
-						<div className="min-w-0 flex-1">
-							<p className="text-sm font-semibold text-white truncate">{user?.name}</p>
-							<p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
-						</div>
-						<ThemeToggle />
+			<div className="border-t border-[var(--border)] p-4 pb-safe">
+				<div className="flex items-center gap-3 mb-3">
+					<div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500/30 to-violet-500/30 border border-cyan-400/30 flex items-center justify-center text-xs font-bold text-cyan-200">
+						{initials}
 					</div>
-					{user?.role && (
-						<span className="inline-block mb-3 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold bg-violet-500/15 text-violet-300 border border-violet-400/30">
-							{user.role}
-						</span>
-					)}
-					<form
-						action={async () => {
-							logout();
-							await signOutAction();
-						}}>
-						<button
-							type="submit"
-							className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-rose-500/15 hover:text-rose-300 hover:border-rose-400/40 border border-[var(--border)] text-sm font-medium text-slate-300 transition-colors">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-								<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-								<polyline points="16 17 21 12 16 7" />
-								<line x1="21" y1="12" x2="9" y2="12" />
-							</svg>
-							Sign Out
-						</button>
-					</form>
+					<div className="min-w-0 flex-1">
+						<p className="text-sm font-semibold text-white truncate">{user?.name}</p>
+						<p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
+					</div>
+					<ThemeToggle />
 				</div>
+				{user?.role && (
+					<span className="inline-block mb-3 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold bg-violet-500/15 text-violet-300 border border-violet-400/30">
+						{user.role}
+					</span>
+				)}
+				<form
+					action={async () => {
+						logout();
+						await signOutAction();
+					}}>
+					<button
+						type="submit"
+						className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/5 hover:bg-rose-500/15 hover:text-rose-300 hover:border-rose-400/40 border border-[var(--border)] text-sm font-medium text-slate-300 transition-colors">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+							<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+							<polyline points="16 17 21 12 16 7" />
+							<line x1="21" y1="12" x2="9" y2="12" />
+						</svg>
+						Sign Out
+					</button>
+				</form>
+			</div>
+		</>
+	);
+
+	return (
+		<div className="flex flex-col md:flex-row min-h-screen md:h-screen bg-transparent text-slate-100">
+			{/* Mobile top bar */}
+			<header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] backdrop-blur-xl pt-safe">
+				<button
+					type="button"
+					aria-label="Open menu"
+					onClick={() => setDrawerOpen(true)}
+					className="p-2 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] text-slate-300">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+						<line x1="3" y1="6" x2="21" y2="6" />
+						<line x1="3" y1="12" x2="21" y2="12" />
+						<line x1="3" y1="18" x2="21" y2="18" />
+					</svg>
+				</button>
+				<div className="flex items-center gap-2">
+					<div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/30 to-emerald-500/20 border border-cyan-400/40 flex items-center justify-center">
+						<svg viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+							<path d="M12 2.5C8 8 5 11 5 14.5a7 7 0 0 0 14 0c0-3.5-3-6.5-7-12Z" />
+						</svg>
+					</div>
+					<h1 className="text-base font-bold tracking-tight text-white">See ME</h1>
+				</div>
+				<ThemeToggle />
+			</header>
+
+			{/* Desktop sidebar */}
+			<aside className="hidden md:flex w-72 shrink-0 relative border-r border-[var(--border)] bg-[rgba(10,15,31,0.7)] backdrop-blur-xl flex-col">
+				{SidebarContent}
 			</aside>
 
-			<main className="flex-1 overflow-auto">
-				<div className="px-8 py-8 max-w-[1600px] mx-auto">{children}</div>
+			{/* Mobile drawer */}
+			{drawerOpen && (
+				<div
+					className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+					onClick={() => setDrawerOpen(false)}
+					aria-hidden="true"
+				/>
+			)}
+			<aside
+				className={`md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] border-r border-[var(--border)] bg-[var(--bg-surface)] backdrop-blur-xl flex flex-col transform transition-transform duration-200 ease-out ${
+					drawerOpen ? 'translate-x-0' : '-translate-x-full'
+				}`}
+				aria-hidden={!drawerOpen}>
+				<div className="flex justify-end px-3 pt-3">
+					<button
+						type="button"
+						aria-label="Close menu"
+						onClick={() => setDrawerOpen(false)}
+						className="p-2 rounded-lg text-slate-300 hover:bg-white/5">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+							<line x1="18" y1="6" x2="6" y2="18" />
+							<line x1="6" y1="6" x2="18" y2="18" />
+						</svg>
+					</button>
+				</div>
+				{SidebarContent}
+			</aside>
+
+			<main className="flex-1 overflow-auto pb-safe">
+				<div className="px-4 py-5 md:px-8 md:py-8 max-w-[1600px] mx-auto">{children}</div>
 			</main>
 		</div>
 	);

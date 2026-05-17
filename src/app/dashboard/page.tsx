@@ -8,13 +8,15 @@ import { useDashboardStats, usePondStatuses, type PondStatus } from '@/hooks/use
 import { useAllPondsReadings, usePonds, type PondWithOwner, type Range } from '@/hooks/useApi';
 import { STATUS_DOT_BG, STATUS_DOT_GLOW, STATUS_LABEL } from '@/lib/pondStatus';
 import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 export default function DashboardPage() {
 	const router = useRouter();
-	const { isAuthenticated, user } = useAuthStore();
+	const { status } = useSession();
+	const { user } = useAuthStore();
 	const { ponds, isLoading, error } = usePonds();
 	const { stats } = useDashboardStats();
 	const { byId: statusByPondId } = usePondStatuses();
@@ -35,12 +37,19 @@ export default function DashboardPage() {
 	const { payload: salinityPayload } = useAllPondsReadings('salinity', range);
 
 	useEffect(() => {
-		if (!isAuthenticated) {
-			router.push('/login');
+		if (status === 'unauthenticated') {
+			router.replace('/login');
 		}
-	}, [isAuthenticated, router]);
+	}, [status, router]);
 
-	if (!isAuthenticated) return null;
+	if (status === 'loading') {
+		return (
+			<MainLayout>
+				<LoadingSpinner />
+			</MainLayout>
+		);
+	}
+	if (status === 'unauthenticated') return null;
 
 	return (
 		<MainLayout>

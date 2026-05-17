@@ -1,21 +1,22 @@
 'use client';
 
 import { LoadingSpinner } from '@/components/Common';
-import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function Home() {
 	const router = useRouter();
-	const { isAuthenticated } = useAuthStore();
+	const { status } = useSession();
 
 	useEffect(() => {
-		if (isAuthenticated) {
-			router.push('/dashboard');
+		if (status === 'loading') return;
+		if (status === 'authenticated') {
+			router.replace('/dashboard');
 		} else {
-			router.push('/login');
+			router.replace('/login');
 		}
-	}, [isAuthenticated, router]);
+	}, [status, router]);
 
 	return (
 		<div className="min-h-screen grid-bg flex items-center justify-center">

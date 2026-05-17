@@ -35,7 +35,8 @@
       "Bash(python \"C:/Users/Naj/.claude/skills/docx/scripts/office/soffice.py\" --headless --convert-to pdf docs/User-Guide.docx --outdir /tmp/)",
       "Bash(where soffice *)",
       "Read(//c/Program Files/LibreOffice/program/**)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(version\" | head -10)"
     ]
   }
 }

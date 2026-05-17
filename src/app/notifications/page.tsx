@@ -3,6 +3,7 @@
 import { ErrorMessage, LoadingSpinner } from '@/components/Common';
 import MainLayout from '@/components/MainLayout';
 import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
@@ -56,15 +57,16 @@ const SENSOR_LABEL: Record<string, string> = {
 
 export default function NotificationsPage() {
 	const router = useRouter();
-	const { isAuthenticated, user } = useAuthStore();
+	const { status: sessionStatus } = useSession();
+	const { user } = useAuthStore();
 	const isAdmin = user?.role === 'admin';
 	const [tab, setTab] = useState<'maintenance' | 'alerts'>('maintenance');
 	const [statusFilter, setStatusFilter] = useState<string>('all');
 	const [pondFilter, setPondFilter] = useState<string>('all');
 
 	useEffect(() => {
-		if (!isAuthenticated) router.push('/login');
-	}, [isAuthenticated, router]);
+		if (sessionStatus === 'unauthenticated') router.replace('/login');
+	}, [sessionStatus, router]);
 
 	const { data: maintenance, error: mErr, isLoading: mLoading, mutate: mMutate } =
 		useSWR<MaintenanceRow[]>('/api/maintenance', fetcher, {
@@ -77,7 +79,14 @@ export default function NotificationsPage() {
 		{ refreshInterval: 30_000 },
 	);
 
-	if (!isAuthenticated) return null;
+	if (sessionStatus === 'loading') {
+		return (
+			<MainLayout>
+				<LoadingSpinner />
+			</MainLayout>
+		);
+	}
+	if (sessionStatus === 'unauthenticated') return null;
 	if (user?.role === 'viewer') {
 		return (
 			<MainLayout>

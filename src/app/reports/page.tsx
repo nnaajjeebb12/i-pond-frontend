@@ -11,6 +11,7 @@ import {
 	useRawReadings,
 } from '@/hooks/useApi';
 import { useAuthStore } from '@/store/authStore';
+import { useSession } from 'next-auth/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useRouter } from 'next/navigation';
@@ -77,7 +78,8 @@ function validateCustom(from: string, to: string): string | null {
 
 export default function ReportsPage() {
 	const router = useRouter();
-	const { isAuthenticated, user } = useAuthStore();
+	const { status: sessionStatus } = useSession();
+	const { user } = useAuthStore();
 	const { ponds, isLoading: isPondsLoading } = usePonds();
 	const [selectedValues, setSelectedValues] = useState<ReportFormData | null>(
 		null,
@@ -121,11 +123,18 @@ export default function ReportsPage() {
 		);
 
 	useEffect(() => {
-		if (!isAuthenticated) router.push('/login');
-		if (isAuthenticated && user?.role === 'viewer') router.push('/dashboard');
-	}, [isAuthenticated, user, router]);
+		if (sessionStatus === 'unauthenticated') router.replace('/login');
+		if (sessionStatus === 'authenticated' && user?.role === 'viewer') router.replace('/dashboard');
+	}, [sessionStatus, user, router]);
 
-	if (!isAuthenticated || user?.role === 'viewer') return null;
+	if (sessionStatus === 'loading') {
+		return (
+			<MainLayout>
+				<LoadingSpinner />
+			</MainLayout>
+		);
+	}
+	if (sessionStatus === 'unauthenticated' || user?.role === 'viewer') return null;
 
 	const isAdmin = user?.role === 'admin';
 
