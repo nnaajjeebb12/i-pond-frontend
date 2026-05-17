@@ -6,9 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "simulate": "node --experimental-strip-types scripts/simulate-esp32.ts",
-    "seed:utilization": "node --experimental-strip-types scripts/seed-utilization.ts"
+    "lint": "eslint"
   },
   "dependencies": {
     "axios": "^1.15.0",

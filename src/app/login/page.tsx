@@ -10,48 +10,6 @@ interface LoginFormData {
 	password: string;
 }
 
-const DEMO_ACCOUNTS = [
-	{
-		email: 'admin@soletronix.com',
-		password: 'admin123',
-		role: 'Admin',
-		desc: 'Full access',
-		accent: 'violet',
-	},
-	{
-		email: 'owner1@ipond.com',
-		password: 'owner123',
-		role: 'Owner One',
-		desc: 'Ponds 1-5',
-		accent: 'cyan',
-	},
-	{
-		email: 'owner2@ipond.com',
-		password: 'owner123',
-		role: 'Owner Two',
-		desc: 'Ponds 6-10',
-		accent: 'emerald',
-	},
-];
-
-const ACCENT_MAP: Record<string, { dot: string; pill: string; border: string }> = {
-	violet: {
-		dot: 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.7)]',
-		pill: 'bg-violet-500/10 text-violet-300 border-violet-400/30',
-		border: 'hover:border-violet-400/50',
-	},
-	cyan: {
-		dot: 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]',
-		pill: 'bg-cyan-500/10 text-cyan-300 border-cyan-400/30',
-		border: 'hover:border-cyan-400/50',
-	},
-	emerald: {
-		dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]',
-		pill: 'bg-emerald-500/10 text-emerald-300 border-emerald-400/30',
-		border: 'hover:border-emerald-400/50',
-	},
-};
-
 export default function LoginPage() {
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
@@ -61,13 +19,7 @@ export default function LoginPage() {
 		register,
 		handleSubmit,
 		formState: { errors },
-		setValue,
-	} = useForm<LoginFormData>({
-		defaultValues: {
-			email: 'admin@soletronix.com',
-			password: 'admin123',
-		},
-	});
+	} = useForm<LoginFormData>();
 
 	const onSubmit = async (data: LoginFormData) => {
 		setIsLoading(true);
@@ -185,47 +137,6 @@ export default function LoginPage() {
 							{isLoading ? 'Authenticating…' : 'Sign In →'}
 						</button>
 					</form>
-
-					<div className="mt-7 pt-6 border-t border-white/5">
-						<div className="flex items-center justify-between mb-3">
-							<h3 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-slate-400">
-								Demo Accounts
-							</h3>
-							<span className="text-[10px] text-slate-500">click to autofill</span>
-						</div>
-						<div className="space-y-2">
-							{DEMO_ACCOUNTS.map((account) => {
-								const a = ACCENT_MAP[account.accent];
-								return (
-									<button
-										key={account.email}
-										type="button"
-										onClick={() => {
-											setValue('email', account.email);
-											setValue('password', account.password);
-										}}
-										className={`w-full text-left p-3 border border-white/10 bg-white/3 rounded-lg ${a.border} hover:bg-white/5 transition-all cursor-pointer group`}>
-										<div className="flex justify-between items-center gap-3">
-											<div className="flex items-center gap-2.5 min-w-0">
-												<span className={`w-2 h-2 rounded-full shrink-0 ${a.dot}`} />
-												<div className="min-w-0">
-													<p className="font-semibold text-slate-100 text-sm truncate">
-														{account.role}
-													</p>
-													<p className="text-slate-400 text-[11px] font-mono truncate">
-														{account.email}
-													</p>
-												</div>
-											</div>
-											<span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${a.pill} shrink-0 uppercase tracking-wider`}>
-												{account.desc}
-											</span>
-										</div>
-									</button>
-								);
-							})}
-						</div>
-					</div>
 				</div>
 
 				<p className="text-center text-[11px] text-slate-500 mt-6 font-mono">

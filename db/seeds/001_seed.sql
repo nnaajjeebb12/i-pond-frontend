@@ -4,20 +4,11 @@
 -- Pond IDs are explicit (1-10) to match ESP32 `pnd` field.
 
 -- ---------- owners ----------
--- Passwords:
---   admin@soletronix.com -> admin123
---   owner1@ipond.com     -> owner123
---   owner2@ipond.com     -> owner123
+-- Insert production user accounts here with strong passwords.
+-- Example (replace with real credentials before running):
+--   INSERT INTO owners (id, name, email, role, password_hash) VALUES
+--       ('<uuid>', 'Admin', 'admin@yourdomain.com', 'admin', crypt('<strong-password>', gen_salt('bf', 10)));
 
-INSERT INTO owners (id, name, email, role, password_hash) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'Admin',     'admin@soletronix.com', 'admin', crypt('admin123', gen_salt('bf', 10))),
-    ('00000000-0000-0000-0000-000000000002', 'Owner One', 'owner1@ipond.com',     'owner', crypt('owner123', gen_salt('bf', 10))),
-    ('00000000-0000-0000-0000-000000000003', 'Owner Two', 'owner2@ipond.com',     'owner', crypt('owner123', gen_salt('bf', 10)))
-ON CONFLICT (id) DO UPDATE SET
-    name          = EXCLUDED.name,
-    email         = EXCLUDED.email,
-    role          = EXCLUDED.role,
-    password_hash = EXCLUDED.password_hash;
 
 -- ---------- ponds ----------
 -- Ponds 1-5 -> Owner One, ponds 6-10 -> Owner Two.
