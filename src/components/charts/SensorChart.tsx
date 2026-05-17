@@ -533,7 +533,7 @@ export default function SensorChart(props: Props) {
 							background: 'rgba(10, 15, 31, 0.92)',
 							border: `1px solid ${color}66`,
 							boxShadow: `0 8px 30px -8px ${color}40, 0 0 0 1px ${color}30`,
-							left: Math.min(Math.max(cursor.x + 12, 8), (wrapRef.current?.clientWidth ?? 600) - 160),
+							left: Math.min(Math.max(cursor.x + 12, 8), 600 - 160),
 							top: Math.max(cursor.y - 60, 4),
 							minWidth: 150,
 						}}>
