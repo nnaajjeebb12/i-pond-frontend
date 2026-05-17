@@ -154,16 +154,19 @@ export function useReadings(
 		if (!data) return;
 		if (isTodayPond && data.mode === 'raw') {
 			if (lastTimestamp === null) {
-				setTimeout(() => setTodayBuffer(data.data), 0);
-				if (data.data.length > 0) {
-					setLastTimestamp(data.data[data.data.length - 1].time);
-				}
+				const ts = data.data.length > 0 ? data.data[data.data.length - 1].time : null;
+				setTimeout(() => {
+					setTodayBuffer(data.data);
+					if (ts !== null) setLastTimestamp(ts);
+				}, 0);
 			} else if (data.data.length > 0) {
-				setTodayBuffer((prev) => [...prev, ...data.data]);
-				setLastTimestamp(data.data[data.data.length - 1].time);
+				setTimeout(() => {
+					setTodayBuffer((prev) => [...prev, ...data.data]);
+					setLastTimestamp(data.data[data.data.length - 1].time);
+				}, 0);
 			}
 		}
-		setLastUpdated(Date.now());
+		setTimeout(() => setLastUpdated(Date.now()), 0);
 	}, [data, isTodayPond, lastTimestamp]);
 
 	const refresh = useCallback(() => {
