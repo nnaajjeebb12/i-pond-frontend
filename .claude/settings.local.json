@@ -40,7 +40,28 @@
       "Bash(npx --no-install tsc --noEmit)",
       "PowerShell(npx --no-install tsc --noEmit 2>&1)",
       "PowerShell(npx tsc --noEmit 2>&1)",
-      "PowerShell(npx tsc --noEmit; echo \"EXIT=$LASTEXITCODE\")"
+      "PowerShell(npx tsc --noEmit; echo \"EXIT=$LASTEXITCODE\")",
+      "Bash(node -e \"const b=require\\('bcryptjs'\\); console.log\\(b.hashSync\\('naj1234',10\\)\\);\")",
+      "Bash(npx playwright *)",
+      "Bash(curl -s -o nul -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(findstr /i \"DATABASE_URL APP_TIMEZONE API_TOKEN\")",
+      "Bash(findstr /R \"DATABASE_URL APP_TIMEZONE API_TOKEN NEXTAUTH\" .env 2>nul)",
+      "Bash(dir .env*)",
+      "Bash(findstr /i postgres)",
+      "Bash(node -e \"const b=require\\('bcryptjs'\\); console.log\\(b.hashSync\\('Owner123!', 10\\)\\);\")",
+      "Bash(curl -s -o nul -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(node scripts/screenshot-owner-manual.js)",
+      "Bash(tasklist)",
+      "Bash(findstr /i node)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(node -e ' *)",
+      "PowerShell(Stop-Process -Name node -Force -ErrorAction SilentlyContinue; Start-Sleep 3; \\(Get-Process node -ErrorAction SilentlyContinue\\).Count)",
+      "Bash(node scripts/docs/owner-manual.js)"
+    ],
+    "additionalDirectories": [
+      "J:\\1. Projects\\5. github iPond\\i-pond-frontend"
     ]
   }
 }

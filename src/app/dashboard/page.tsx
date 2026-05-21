@@ -513,12 +513,15 @@ function SystemStatusTile({
 				systemStatus: 'healthy' | 'degraded' | 'offline';
 				lastReceivedAt: string | null;
 				minutesSinceLastData: number | null;
+				scope?: 'global' | 'mine';
 		  }
 		| undefined;
 }) {
 	if (!stats) {
 		return <StatTile label="System Status" value="—" accent="violet" />;
 	}
+	const isMine = stats.scope === 'mine';
+	const label = isMine ? 'System Status (My Ponds)' : 'System Status (Global)';
 	const map = {
 		healthy: { value: 'Healthy', accent: 'emerald' as const, pulse: true },
 		degraded: { value: 'Degraded', accent: 'rose' as const, pulse: false },
@@ -526,17 +529,17 @@ function SystemStatusTile({
 	}[stats.systemStatus];
 
 	let sub = '';
-	if (stats.systemStatus === 'degraded' && stats.minutesSinceLastData !== null) {
+	if (stats.systemStatus === 'healthy') {
+		sub = isMine ? 'All your ponds sending data' : 'All ponds sending data';
+	} else if (stats.systemStatus === 'degraded' && stats.minutesSinceLastData !== null) {
 		sub = `Last data ${Math.floor(stats.minutesSinceLastData)} min ago`;
-	} else if (stats.systemStatus === 'offline' && stats.lastReceivedAt) {
-		sub = `No data since ${new Date(stats.lastReceivedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 	} else if (stats.systemStatus === 'offline') {
-		sub = 'No data received';
+		sub = isMine ? 'No data from your ponds' : 'No data received';
 	}
 
 	return (
 		<StatTile
-			label="System Status"
+			label={label}
 			value={map.value}
 			accent={map.accent}
 			pulse={map.pulse}

@@ -21,6 +21,26 @@ export async function GET() {
   }
 
   const isAdmin = session.user.role === "admin";
+  const scope: "global" | "mine" = isAdmin ? "global" : "mine";
+
+  if (!isAdmin) {
+    const access = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM user_pond_access WHERE user_id = $1`,
+      [session.user.id]
+    );
+    if (Number(access.rows[0]?.count ?? 0) === 0) {
+      return NextResponse.json({
+        activePonds: 0,
+        activeSensors: 0,
+        totalPonds: 0,
+        totalSensors: 0,
+        systemStatus: "offline",
+        lastReceivedAt: null,
+        minutesSinceLastData: null,
+        scope,
+      });
+    }
+  }
 
   const scopeSql = isAdmin
     ? `(SELECT id FROM ponds)`
@@ -66,5 +86,6 @@ export async function GET() {
     systemStatus,
     lastReceivedAt: lastReceivedAt ? lastReceivedAt.toISOString() : null,
     minutesSinceLastData,
+    scope,
   });
 }

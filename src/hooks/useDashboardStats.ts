@@ -11,6 +11,7 @@ export type DashboardStats = {
 	systemStatus: 'healthy' | 'degraded' | 'offline';
 	lastReceivedAt: string | null;
 	minutesSinceLastData: number | null;
+	scope: 'global' | 'mine';
 };
 
 async function fetcher(url: string): Promise<DashboardStats> {

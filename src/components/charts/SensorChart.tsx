@@ -81,8 +81,21 @@ const fmtMDHM = new Intl.DateTimeFormat('en-PH', {
 function formatTick(ts: number, range: RangeKey) {
 	const d = new Date(ts);
 	if (range === 'today') return fmtHM.format(d);
-	if (range === '30d') return fmtMD.format(d);
+	if (range === '14d' || range === '30d') return fmtMD.format(d);
 	return fmtMDHM.format(d).replace(',', '');
+}
+
+function xAxisIncrs(range: RangeKey): uPlot.Axis.Incrs {
+	if (range === 'today') return [1800, 3600, 7200, 10800, 21600];
+	if (range === '7d') return [21600, 43200, 86400];
+	if (range === '14d') return [86400, 172800, 259200];
+	return [86400, 259200, 604800];
+}
+
+function xAxisSpace(range: RangeKey): number {
+	if (range === 'today') return 70;
+	if (range === '7d') return 90;
+	return 80;
 }
 
 function formatTooltipTime(ts: number, mode: 'raw' | 'aggregated' | 'compare') {
@@ -487,9 +500,11 @@ export default function SensorChart(props: Props) {
 					stroke: '#94a3b8',
 					grid: { stroke: 'rgba(148,163,184,0.08)' },
 					ticks: { stroke: 'rgba(148,163,184,0.2)' },
-					...(showDots
-						? { space: 60, incrs: [3600] as uPlot.Axis.Incrs }
-						: {}),
+					space: xAxisSpace(range),
+					incrs: xAxisIncrs(range),
+					size: range === 'today' ? 40 : 55,
+					rotate: range === 'today' ? 0 : -30,
+					gap: 8,
 				},
 				{
 					stroke: '#94a3b8',

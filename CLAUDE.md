@@ -24,9 +24,23 @@
 
 IoT dashboard: ESP32 sensors → TimescaleDB (PostgreSQL) → Next.js frontend with real-time charts. Multi-tenant, role-based (admin/owner/viewer), alerts, maintenance, utilization tracking.
 
+## Commands
+
+- `npm run dev` — Next dev server
+- `npm run build` — production build
+- `npm run start` — serve build
+- `npm run lint` — eslint
+- `npm run seed:pond1` — seed today's data for pond 1
+- `node --experimental-strip-types scripts/simulate-esp32.ts` — fake ESP32 ingest
+- `node --experimental-strip-types scripts/seed-utilization.ts` — seed status logs
+- `node --experimental-strip-types scripts/generate-token.ts` — issue API_TOKEN
+- `docker compose up -d` — start TimescaleDB
+
+No test suite. Verify changes via dev server + browser.
+
 ## Stack
 
-- **Frontend**: Next.js 16 (App Router) + React 19 + Tailwind 4
+- **Frontend**: Next.js 15 (App Router) + React 19 + Tailwind 4
 - **Charts**: **uPlot** (canvas-based, replaced Recharts)
 - **State**: Zustand (auth) + SWR (data fetching)
 - **Forms**: react-hook-form
