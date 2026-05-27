@@ -63,7 +63,15 @@ const SENSOR_LABEL: Record<string, string> = {
 	ph: 'pH',
 	salinity: 'Salinity',
 	dissolved_oxygen: 'Dissolved Oxygen',
+	connectivity: 'Connectivity',
 };
+
+function formatDuration(mins: number): string {
+	if (mins < 0) return 'Never received';
+	if (mins < 60) return `${Math.round(mins)}m ago`;
+	if (mins < 1440) return `${(mins / 60).toFixed(1)}h ago`;
+	return `${(mins / 1440).toFixed(1)}d ago`;
+}
 
 export default function NotificationsPage() {
 	const router = useRouter();
@@ -371,10 +379,14 @@ export default function NotificationsPage() {
 												{SENSOR_LABEL[a.sensor] ?? a.sensor}
 											</td>
 											<td className="px-4 py-3 text-mono text-rose-300">
-												{a.lastValue.toFixed(2)}
+												{a.sensor === 'connectivity'
+													? formatDuration(a.lastValue)
+													: a.lastValue.toFixed(2)}
 											</td>
 											<td className="px-4 py-3 text-mono text-slate-400">
-												{a.optimalMin}–{a.optimalMax}
+												{a.sensor === 'connectivity'
+													? '—'
+													: `${a.optimalMin}–${a.optimalMax}`}
 											</td>
 											<td className="px-4 py-3 text-mono">
 												{a.consecutiveCount}

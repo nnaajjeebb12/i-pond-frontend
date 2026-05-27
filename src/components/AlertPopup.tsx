@@ -83,7 +83,15 @@ export default function AlertPopup() {
 								</p>
 								{isConnectivity ? (
 									<p className="text-sm text-slate-300 mt-1">
-										No data received for 20+ minutes. Check ESP32 device.
+										No data received for{' '}
+										{a.lastValue < 0
+											? 'an unknown duration'
+											: a.lastValue < 60
+												? `${Math.round(a.lastValue)} minutes`
+												: a.lastValue < 1440
+													? `${(a.lastValue / 60).toFixed(1)} hours`
+													: `${(a.lastValue / 1440).toFixed(1)} days`}
+										. Check ESP32 device.
 									</p>
 								) : (
 									<>
