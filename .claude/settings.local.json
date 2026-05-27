@@ -62,7 +62,10 @@
       "Bash(findstr /i DATABASE)",
       "Bash(findstr /i \"DATABASE POSTGRES\")",
       "Bash(mv \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.tsx\" \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.redirect.tsx.bak\")",
-      "Bash(mv \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.hidden.tsx.bak\" \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.tsx\")"
+      "Bash(mv \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.hidden.tsx.bak\" \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.tsx\")",
+      "Bash(Select-Object -First 30)",
+      "PowerShell(npx tsc --noEmit 2>$null)",
+      "PowerShell(node --experimental-strip-types --check scripts/alert-worker.ts)"
     ],
     "additionalDirectories": [
       "J:\\1. Projects\\5. github iPond\\i-pond-frontend"
