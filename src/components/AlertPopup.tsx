@@ -12,6 +12,7 @@ const SENSOR_LABELS: Record<string, { name: string; unit: string }> = {
 	ph: { name: 'pH', unit: 'pH' },
 	salinity: { name: 'Salinity', unit: 'ppt' },
 	dissolved_oxygen: { name: 'Dissolved Oxygen', unit: 'mg/L' },
+	connectivity: { name: 'Connectivity', unit: '' },
 };
 
 export default function AlertPopup() {
@@ -72,21 +73,30 @@ export default function AlertPopup() {
 							name: a.sensor,
 							unit: '',
 						};
+						const isConnectivity = a.sensor === 'connectivity';
 						return (
 							<div
 								key={a.id}
 								className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4">
 								<p className="font-semibold text-white">
-									⚠️ {a.pondName} — {meta.name} Alert
+									⚠️ {a.pondName} — {isConnectivity ? 'No Data Received' : `${meta.name} Alert`}
 								</p>
-								<p className="text-sm text-slate-300 mt-1">
-									{a.consecutiveCount} consecutive readings out of range (~1h 45m of abnormal data)
-								</p>
-								<p className="text-sm text-slate-400 mt-1 text-mono">
-									Current: {fmt(a.lastValue)}
-									{meta.unit} | Optimal: {fmt(a.optimalMin)}–{fmt(a.optimalMax)}
-									{meta.unit}
-								</p>
+								{isConnectivity ? (
+									<p className="text-sm text-slate-300 mt-1">
+										No data received for 20+ minutes. Check ESP32 device.
+									</p>
+								) : (
+									<>
+										<p className="text-sm text-slate-300 mt-1">
+											{a.consecutiveCount} consecutive readings out of range (~1h 45m of abnormal data)
+										</p>
+										<p className="text-sm text-slate-400 mt-1 text-mono">
+											Current: {fmt(a.lastValue)}
+											{meta.unit} | Optimal: {fmt(a.optimalMin)}–{fmt(a.optimalMax)}
+											{meta.unit}
+										</p>
+									</>
+								)}
 								<p className="text-[10px] text-slate-500 mt-1">
 									Triggered {new Date(a.triggeredAt).toLocaleString()}
 								</p>

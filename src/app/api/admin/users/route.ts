@@ -14,6 +14,7 @@ type UserRow = {
   email: string;
   role: "admin" | "owner" | "viewer";
   created_at: Date;
+  expires_at: Date | null;
   pond_ids: number[] | null;
 };
 
@@ -24,7 +25,7 @@ export async function GET() {
   if (!guard.ok) return guard.res;
 
   const { rows } = await pool.query<UserRow>(
-    `SELECT o.id, o.name, o.email, o.role, o.created_at,
+    `SELECT o.id, o.name, o.email, o.role, o.created_at, o.expires_at,
             COALESCE(
               (SELECT array_agg(upa.pond_id ORDER BY upa.pond_id)
                  FROM user_pond_access upa
@@ -42,6 +43,7 @@ export async function GET() {
       email: r.email,
       role: r.role,
       createdAt: r.created_at?.toISOString?.() ?? null,
+      expiresAt: r.expires_at?.toISOString?.() ?? null,
       pondIds: (r.pond_ids ?? []).map((n) => String(n)),
     }))
   );
@@ -56,7 +58,16 @@ type PostBody = {
   role?: unknown;
   pondIds?: unknown;
   company_name?: unknown;
+  expiresAt?: unknown;
 };
+
+function parseExpiresAt(raw: unknown): Date | null | "invalid" {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw !== "string") return "invalid";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "invalid";
+  return d;
+}
 
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin();
@@ -90,6 +101,14 @@ export async function POST(req: NextRequest) {
         .map((n) => Math.trunc(n))
     : [];
 
+  const parsedExpiry = parseExpiresAt(body.expiresAt);
+  if (parsedExpiry === "invalid") {
+    return NextResponse.json({ error: "invalid_expires_at" }, { status: 400 });
+  }
+  // Default: now + 5 years if not provided.
+  const expiresAt: Date =
+    parsedExpiry ?? new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000);
+
   const passwordHash = await bcrypt.hash(password, 10);
 
   const client = await pool.connect();
@@ -105,11 +124,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "email_taken" }, { status: 409 });
     }
 
-    const ins = await client.query<{ id: string; created_at: Date }>(
-      `INSERT INTO owners (name, email, role, password_hash, company_name)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, created_at`,
-      [name, email, role, passwordHash, companyName]
+    const ins = await client.query<{ id: string; created_at: Date; expires_at: Date | null }>(
+      `INSERT INTO owners (name, email, role, password_hash, company_name, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, created_at, expires_at`,
+      [name, email, role, passwordHash, companyName, expiresAt]
     );
     const newId = ins.rows[0].id;
 
@@ -131,6 +150,7 @@ export async function POST(req: NextRequest) {
         email,
         role,
         createdAt: ins.rows[0].created_at.toISOString(),
+        expiresAt: ins.rows[0].expires_at?.toISOString?.() ?? null,
         pondIds: pondIds.map((n) => String(n)),
       },
       { status: 201 }

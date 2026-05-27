@@ -327,7 +327,7 @@ export default function ThresholdSettingsPage() {
 				<div className="space-y-3">
 					{SENSORS.map((s) => {
 						const current = lookup(s.key);
-						const d = draft[s.key] ?? { min: '', max: '' };
+						const d = draft[s.key] ?? { min: '', max: '', value: '' };
 						const isOpen = openHistory === s.key;
 						return (
 							<div

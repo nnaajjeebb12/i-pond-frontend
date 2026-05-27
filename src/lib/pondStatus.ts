@@ -8,8 +8,8 @@ export function getPondStatus(
   if (hasMaintenance) return 'maintenance';
   if (!lastSeenMs) return 'offline';
   const mins = (nowMs - lastSeenMs) / 1000 / 60;
-  if (mins < 20) return 'online';
-  if (mins < 45) return 'stale';
+  if (mins < 16) return 'online';
+  if (mins < 20) return 'stale';
   return 'offline';
 }
 

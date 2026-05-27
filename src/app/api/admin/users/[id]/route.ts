@@ -17,6 +17,7 @@ type PatchBody = {
   role?: unknown;
   pondIds?: unknown;
   company_name?: unknown;
+  expiresAt?: unknown;
 };
 
 // ---------- PATCH /api/admin/users/:id ----------
@@ -77,6 +78,25 @@ export async function PATCH(
     const hash = await bcrypt.hash(body.password, 10);
     params.push(hash);
     sets.push(`password_hash = $${params.length}`);
+  }
+
+  if (body.expiresAt !== undefined) {
+    if (body.expiresAt === null || body.expiresAt === "") {
+      params.push(null);
+      sets.push(`expires_at = $${params.length}`);
+    } else if (typeof body.expiresAt === "string") {
+      const d = new Date(body.expiresAt);
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "invalid_expires_at" }, { status: 400 });
+      }
+      params.push(d);
+      sets.push(`expires_at = $${params.length}`);
+      // Reset notification flags when expiry changes.
+      sets.push(`subscription_notified_30 = FALSE`);
+      sets.push(`subscription_notified_7 = FALSE`);
+    } else {
+      return NextResponse.json({ error: "invalid_expires_at" }, { status: 400 });
+    }
   }
 
   const updatePondIds = Array.isArray(body.pondIds);

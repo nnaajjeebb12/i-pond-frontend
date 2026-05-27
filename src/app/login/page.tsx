@@ -14,6 +14,7 @@ export default function LoginPage() {
 	const router = useRouter();
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState('');
+	const [expired, setExpired] = useState(false);
 	const [rememberMe, setRememberMe] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
 
@@ -28,6 +29,23 @@ export default function LoginPage() {
 		setError('');
 
 		try {
+			const pre = await fetch('/api/auth/precheck', {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email: data.email, password: data.password }),
+			});
+			const preBody = (await pre.json().catch(() => ({}))) as { result?: string };
+
+			if (preBody.result === 'expired') {
+				setExpired(true);
+				return;
+			}
+			if (preBody.result !== 'ok') {
+				setError('Invalid email or password.');
+				return;
+			}
+
 			const res = await signIn('credentials', {
 				email: data.email,
 				password: data.password,
@@ -55,6 +73,31 @@ export default function LoginPage() {
 			setIsLoading(false);
 		}
 	};
+
+	if (expired) {
+		return (
+			<div className="flex flex-col items-center justify-center min-h-screen p-4 grid-bg">
+				<div className="text-center p-8 rounded-xl border border-rose-500/30 bg-rose-500/10 max-w-md">
+					<h2 className="text-2xl font-bold text-rose-400 mb-2">Subscription Expired</h2>
+					<p className="text-slate-300 mb-4">
+						Your account access has expired. Please contact Soletronix to renew.
+					</p>
+					<a
+						href="mailto:sales@soletronix.com"
+						className="text-cyan-400 underline">
+						sales@soletronix.com
+					</a>
+					<div className="mt-6">
+						<button
+							onClick={() => setExpired(false)}
+							className="text-xs text-slate-400 hover:text-slate-200">
+							← Back to login
+						</button>
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="relative min-h-screen overflow-hidden grid-bg flex items-center justify-center p-4">

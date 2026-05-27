@@ -4,10 +4,17 @@
 -- Pond IDs are explicit (1-10) to match ESP32 `pnd` field.
 
 -- ---------- owners ----------
--- Insert production user accounts here with strong passwords.
--- Example (replace with real credentials before running):
---   INSERT INTO owners (id, name, email, role, password_hash) VALUES
---       ('<uuid>', 'Admin', 'admin@yourdomain.com', 'admin', crypt('<strong-password>', gen_salt('bf', 10)));
+-- Production admin account. pgcrypto's bf hash is bcrypt-compatible with bcryptjs.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+INSERT INTO owners (id, name, email, role, password_hash) VALUES
+    ('00000000-0000-0000-0000-000000000001', 'Admin', 'admin@soletronix.com', 'admin',
+     crypt('Soletronix@ipond2026', gen_salt('bf', 10)))
+ON CONFLICT (email) DO UPDATE
+    SET name          = EXCLUDED.name,
+        role          = EXCLUDED.role,
+        password_hash = EXCLUDED.password_hash;
 
 
 -- ---------- ponds ----------

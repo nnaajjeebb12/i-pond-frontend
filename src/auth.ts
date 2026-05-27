@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { pool } from "@/lib/db";
@@ -10,7 +10,12 @@ type OwnerRow = {
   email: string;
   role: "admin" | "owner" | "viewer";
   password_hash: string;
+  expires_at: Date | null;
 };
+
+class SubscriptionExpiredError extends CredentialsSignin {
+  code = "SUBSCRIPTION_EXPIRED";
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -28,7 +33,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!email || !password) return null;
 
         const { rows } = await pool.query<OwnerRow>(
-          `SELECT id, name, email, role, password_hash
+          `SELECT id, name, email, role, password_hash, expires_at
              FROM owners
             WHERE LOWER(email) = $1
             LIMIT 1`,
@@ -40,6 +45,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) return null;
+
+        if (user.expires_at !== null) {
+          const now = new Date();
+          if (new Date(user.expires_at).getTime() < now.getTime()) {
+            throw new SubscriptionExpiredError();
+          }
+        }
 
         return {
           id: user.id,

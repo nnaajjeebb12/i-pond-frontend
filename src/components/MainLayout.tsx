@@ -1,6 +1,7 @@
 'use client';
 
 import ThemeToggle from '@/components/ThemeToggle';
+import ExpiryBanner from '@/components/ExpiryBanner';
 import { signOutAction } from '@/app/actions/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSystemHealth } from '@/hooks/useSystemHealth';
@@ -72,7 +73,7 @@ const ICONS = {
 } as const;
 
 const HEALTH_STYLES: Record<
-	'live' | 'stale' | 'offline' | 'loading',
+	'live' | 'offline' | 'loading',
 	{ bg: string; border: string; text: string; dot: string }
 > = {
 	live: {
@@ -80,12 +81,6 @@ const HEALTH_STYLES: Record<
 		border: 'border-emerald-500/25',
 		text: 'text-emerald-300',
 		dot: 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]',
-	},
-	stale: {
-		bg: 'bg-amber-500/10',
-		border: 'border-amber-500/25',
-		text: 'text-amber-300',
-		dot: 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.7)]',
 	},
 	offline: {
 		bg: 'bg-rose-500/10',
@@ -135,6 +130,7 @@ export default function MainLayout({ children }: LayoutProps) {
 		...(user?.role !== 'viewer'
 			? [{ href: '/reports', label: 'Reports', icon: 'reports' as const }]
 			: []),
+		{ href: '/utilization', label: 'Utilization', icon: 'utilization' },
 		{ href: '/settings/thresholds', label: 'Thresholds', icon: 'thresholds' },
 		...(user?.role !== 'viewer'
 			? [
@@ -327,6 +323,7 @@ export default function MainLayout({ children }: LayoutProps) {
 			</aside>
 
 			<main className="flex-1 overflow-auto pb-safe">
+				<ExpiryBanner />
 				<div className="px-4 py-5 md:px-8 md:py-8 max-w-[1600px] mx-auto">{children}</div>
 			</main>
 		</div>

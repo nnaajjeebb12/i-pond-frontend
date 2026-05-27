@@ -5,7 +5,7 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 
 type Sensor = 'temperature' | 'ph' | 'salinity' | 'dissolved_oxygen';
-type Trend = 'rising' | 'falling' | 'stable';
+type Health = 'normal' | 'warning' | 'critical';
 type RangeKey = 'today' | '7d' | '14d' | '30d';
 
 type RawPoint = { time: number; value: number };
@@ -16,7 +16,7 @@ type AggregatedBucket = {
 	min: number;
 	max: number;
 	anomalyCount: number;
-	trend: Trend;
+	health: Health;
 };
 
 export type CompareSeries = {
@@ -104,29 +104,29 @@ function formatTooltipTime(ts: number, mode: 'raw' | 'aggregated' | 'compare') {
 	return `${fmtMDHM.format(d).replace(',', '')} (PHT)`;
 }
 
-const TREND_CONFIG: Record<
-	Trend,
+const HEALTH_CONFIG: Record<
+	Health,
 	{ icon: string; label: string; className: string }
 > = {
-	rising: {
-		icon: '↑',
-		label: 'Rising',
+	normal: {
+		icon: '✓',
+		label: 'Normal',
+		className: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300',
+	},
+	warning: {
+		icon: '⚠',
+		label: 'Warning',
 		className: 'bg-amber-500/10 border-amber-400/30 text-amber-300',
 	},
-	falling: {
-		icon: '↓',
-		label: 'Falling',
+	critical: {
+		icon: '✕',
+		label: 'Critical',
 		className: 'bg-rose-500/10 border-rose-400/30 text-rose-300',
-	},
-	stable: {
-		icon: '→',
-		label: 'Stable',
-		className: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300',
 	},
 };
 
-function TrendBadge({ trend }: { trend: Trend }) {
-	const config = TREND_CONFIG[trend];
+function HealthBadge({ health }: { health: Health }) {
+	const config = HEALTH_CONFIG[health];
 	return (
 		<span
 			className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold whitespace-nowrap ${config.className}`}>
@@ -136,9 +136,15 @@ function TrendBadge({ trend }: { trend: Trend }) {
 	);
 }
 
-function bucketsTrend(buckets: AggregatedBucket[]): Trend {
-	if (buckets.length === 0) return 'stable';
-	return buckets[buckets.length - 1].trend;
+function bucketsHealth(buckets: AggregatedBucket[]): Health {
+	if (buckets.length === 0) return 'normal';
+	return buckets[buckets.length - 1].health;
+}
+
+function isDarkTheme(): boolean {
+	if (typeof document === 'undefined') return true;
+	const theme = document.documentElement.getAttribute('data-theme');
+	return theme !== 'light';
 }
 
 function optimalBandPlugin(getMin: () => number | undefined, getMax: () => number | undefined, dashed: boolean) {
@@ -180,8 +186,13 @@ function optimalValueLinePlugin(getValue: () => number | null | undefined, unit:
 				const y = u.valToPos(v, 'y', true);
 				const left = u.bbox.left;
 				const right = u.bbox.left + u.bbox.width;
+				const dark = isDarkTheme();
+				const lineColor = dark ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.5)';
+				const labelBg = dark ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.9)';
+				const labelText = dark ? '#f1f5f9' : '#0f172a';
+				const labelBorder = dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
 				ctx.save();
-				ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+				ctx.strokeStyle = lineColor;
 				ctx.setLineDash([4, 4]);
 				ctx.lineWidth = 1.2;
 				ctx.beginPath();
@@ -192,9 +203,12 @@ function optimalValueLinePlugin(getValue: () => number | null | undefined, unit:
 				const label = `Optimal: ${v.toFixed(2)} ${unit}`;
 				ctx.font = '11px ui-sans-serif, system-ui';
 				const w = ctx.measureText(label).width + 8;
-				ctx.fillStyle = 'rgba(15,23,42,0.85)';
+				ctx.fillStyle = labelBg;
 				ctx.fillRect(right - w - 4, y - 16, w, 14);
-				ctx.fillStyle = 'rgba(255,255,255,0.85)';
+				ctx.strokeStyle = labelBorder;
+				ctx.lineWidth = 1;
+				ctx.strokeRect(right - w - 4, y - 16, w, 14);
+				ctx.fillStyle = labelText;
 				ctx.fillText(label, right - w, y - 5);
 				ctx.restore();
 			},
@@ -527,15 +541,22 @@ export default function SensorChart(props: Props) {
 		});
 		ro.observe(el);
 
+		const themeObs = new MutationObserver(() => plotRef.current?.redraw());
+		themeObs.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['data-theme'],
+		});
+
 		return () => {
 			ro.disconnect();
+			themeObs.disconnect();
 			u.destroy();
 			plotRef.current = null;
 		};
 	}, [mode, sensor, label, color, range, optimalMin, optimalMax, optimalValue, unit, aligned, compareSeries]);
 
-	const trend: Trend | null =
-		mode === 'aggregated' ? bucketsTrend(aggregated ?? []) : null;
+	const headerHealth: Health | null =
+		mode === 'aggregated' ? bucketsHealth(aggregated ?? []) : null;
 	const nowStatus = stats ? statusOf(stats.now, optimalMin, optimalMax) : null;
 
 	const hover = (() => {
@@ -576,7 +597,7 @@ export default function SensorChart(props: Props) {
 				{ k: 'max', v: b.max, color: '#9ca3af' },
 			],
 			anomalyCount: b.anomalyCount,
-			trend: b.trend,
+			health: b.health,
 		};
 	})();
 
@@ -612,7 +633,7 @@ export default function SensorChart(props: Props) {
 								: `raw · ${stats?.count ?? 0} pts`}
 					</p>
 				</div>
-				{trend && <TrendBadge trend={trend} />}
+				{headerHealth && <HealthBadge health={headerHealth} />}
 			</div>
 
 			{stats && mode !== 'compare' && (
@@ -675,12 +696,12 @@ export default function SensorChart(props: Props) {
 								anomalies: {hover.anomalyCount}
 							</div>
 						)}
-						{'trend' in hover && hover.trend && (
+						{'health' in hover && hover.health && (
 							<div className="mt-1 flex items-center gap-1.5">
 								<span className="text-slate-400 uppercase tracking-wider text-[10px]">
-									trend
+									status
 								</span>
-								<TrendBadge trend={hover.trend} />
+								<HealthBadge health={hover.health} />
 							</div>
 						)}
 					</div>

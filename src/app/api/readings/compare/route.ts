@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
 
     const byPond = new Map<
       number,
-      { time: number; avg: number; min: number; max: number; anomalyCount: number; trend: "stable" }[]
+      { time: number; avg: number; min: number; max: number; anomalyCount: number; health: "normal" }[]
     >();
     for (const id of pondIds) byPond.set(id, []);
     for (const r of rows) {
@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
         min: r.min ?? r.avg,
         max: r.max ?? r.avg,
         anomalyCount: Number(r.anomaly_count ?? 0),
-        trend: "stable",
+        health: "normal",
       });
     }
 

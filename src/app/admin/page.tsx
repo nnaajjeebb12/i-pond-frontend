@@ -14,8 +14,49 @@ type AdminUser = {
 	email: string;
 	role: Role;
 	createdAt: string | null;
+	expiresAt: string | null;
 	pondIds: string[];
 };
+
+function defaultExpiryDate(): string {
+	const d = new Date();
+	d.setFullYear(d.getFullYear() + 5);
+	return d.toISOString().slice(0, 10);
+}
+
+function toDateInput(iso: string | null): string {
+	if (!iso) return '';
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return '';
+	return d.toISOString().slice(0, 10);
+}
+
+function expiryBadgeCls(iso: string | null): {
+	cls: string;
+	label: string;
+} {
+	if (!iso) return { cls: 'text-slate-500', label: '—' };
+	const days = Math.floor(
+		(new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+	);
+	const date = new Date(iso).toLocaleDateString();
+	if (days < 0)
+		return {
+			cls: 'text-rose-300 font-semibold',
+			label: `${date} (expired)`,
+		};
+	if (days <= 7)
+		return {
+			cls: 'text-rose-300 font-semibold',
+			label: `${date} (${days}d)`,
+		};
+	if (days <= 30)
+		return {
+			cls: 'text-amber-300 font-semibold',
+			label: `${date} (${days}d)`,
+		};
+	return { cls: 'text-emerald-300', label: date };
+}
 
 type AdminPond = {
 	id: string;
@@ -134,20 +175,21 @@ function UsersTab({ selfId }: { selfId: string }) {
 							<Th>Role</Th>
 							<Th>Assigned Ponds</Th>
 							<Th>Created</Th>
+							<Th>Expires</Th>
 							<Th className="text-right">Actions</Th>
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-white/5">
 						{!users && (
 							<tr>
-								<td colSpan={6} className="px-4 py-6 text-center text-slate-500">
+								<td colSpan={7} className="px-4 py-6 text-center text-slate-500">
 									Loading…
 								</td>
 							</tr>
 						)}
 						{users && users.length === 0 && (
 							<tr>
-								<td colSpan={6} className="px-4 py-6 text-center text-slate-500">
+								<td colSpan={7} className="px-4 py-6 text-center text-slate-500">
 									No users yet.
 								</td>
 							</tr>
@@ -181,6 +223,12 @@ function UsersTab({ selfId }: { selfId: string }) {
 									{u.createdAt
 										? new Date(u.createdAt).toLocaleDateString()
 										: '—'}
+								</Td>
+								<Td className="text-xs">
+									{(() => {
+										const e = expiryBadgeCls(u.expiresAt);
+										return <span className={e.cls}>{e.label}</span>;
+									})()}
 								</Td>
 								<Td className="text-right">
 									<div className="inline-flex gap-2">
@@ -269,6 +317,9 @@ function UserModal({
 	const [role, setRole] = useState<Role>(user?.role ?? 'owner');
 	const [pondIds, setPondIds] = useState<string[]>(user?.pondIds ?? []);
 	const [pondSearch, setPondSearch] = useState('');
+	const [expiresAt, setExpiresAt] = useState<string>(
+		user ? toDateInput(user.expiresAt) : defaultExpiryDate(),
+	);
 	const [submitting, setSubmitting] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 
@@ -297,6 +348,7 @@ function UserModal({
 				email,
 				role,
 				pondIds: pondIds.map((p) => Number(p)),
+				expiresAt: expiresAt || null,
 			};
 			if (password) body.password = password;
 
@@ -374,6 +426,18 @@ function UserModal({
 						<option value="owner">Owner</option>
 						<option value="viewer">Viewer</option>
 					</select>
+				</div>
+				<div>
+					<label className={labelCls}>Subscription Expiry Date</label>
+					<input
+						type="date"
+						value={expiresAt}
+						onChange={(e) => setExpiresAt(e.target.value)}
+						className={inputCls}
+					/>
+					<p className="mt-1 text-[10px] text-slate-500">
+						Leave blank for no expiry. Default is today + 5 years.
+					</p>
 				</div>
 				<div>
 					<label className={labelCls}>Assign Ponds</label>

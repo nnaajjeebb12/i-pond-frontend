@@ -4,13 +4,15 @@ import useSWR, { SWRConfiguration } from 'swr';
 
 export type Range = 'today' | '7d' | '14d' | '30d';
 
+export type Health = 'normal' | 'warning' | 'critical';
+
 export type AggregatedBucket = {
 	time: number;
 	avg: number;
 	min: number;
 	max: number;
 	anomalyCount: number;
-	trend: 'rising' | 'falling' | 'stable';
+	health: Health;
 };
 
 export type RawPoint = {

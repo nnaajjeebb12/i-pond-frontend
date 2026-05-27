@@ -49,10 +49,14 @@ export async function GET() {
   const { rows } = await pool.query<Row>(sql, isAdmin ? [] : [session.user.id]);
 
   const now = Date.now();
+  const offlinePondIds: number[] = [];
   const out = rows.map((r) => {
     const lastSeenMs = r.last_seen ? r.last_seen.getTime() : null;
     const minutes = lastSeenMs === null ? null : (now - lastSeenMs) / 60_000;
     const status = getPondStatus(lastSeenMs, r.has_maintenance, now);
+    if (status === "offline" && !r.has_maintenance) {
+      offlinePondIds.push(r.pond_id);
+    }
     return {
       pondId: r.pond_id,
       status,
@@ -62,9 +66,24 @@ export async function GET() {
     };
   });
 
-  // Status snapshots are recorded by the TimescaleDB job `record_pond_statuses`
-  // (see db/migrations/011_status_logger_job.sql) every 30 seconds, regardless
-  // of dashboard activity. Do not insert here.
+  // Raise a connectivity alert for each newly offline pond. The partial unique
+  // index on (pond_id, sensor) WHERE resolved_at IS NULL prevents duplicates,
+  // and ON CONFLICT DO NOTHING keeps the call idempotent.
+  if (offlinePondIds.length > 0) {
+    try {
+      await pool.query(
+        `INSERT INTO sensor_alerts
+           (pond_id, sensor, triggered_at, consecutive_count, last_value, optimal_min, optimal_max)
+         SELECT id, 'connectivity', NOW(), 1, 0, 0, 0
+           FROM ponds
+          WHERE id = ANY($1::int[])
+         ON CONFLICT DO NOTHING`,
+        [offlinePondIds]
+      );
+    } catch (err) {
+      console.error("connectivity_alert_insert_error", err);
+    }
+  }
 
   return NextResponse.json(out);
 }

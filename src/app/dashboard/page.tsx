@@ -44,7 +44,7 @@ export default function DashboardPage() {
 	const { byId: statusByPondId } = usePondStatuses();
 	const isAdmin = user?.role === 'admin';
 	const isOwner = user?.role === 'owner';
-	const [range, setRange] = useState<Range>('7d');
+	const [range, setRange] = useState<Range>('today');
 	const [viewMode, setViewMode] = useState<ViewMode>('aggregated');
 	const [selectedOverride, setSelectedOverride] = useState<Set<string> | null>(null);
 	const selectedPondIds = useMemo<Set<string> | null>(() => {
@@ -187,7 +187,7 @@ export default function DashboardPage() {
 									{ponds.length} nodes
 								</span>
 							</div>
-							<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 								<StatTile
 									label="Total Ponds"
 									value={String(stats?.totalPonds ?? ponds.length)}
@@ -202,7 +202,6 @@ export default function DashboardPage() {
 									}
 									accent="emerald"
 								/>
-								<SystemStatusTile stats={stats} />
 								<StatTile
 									label="Last Update"
 									value={
@@ -505,49 +504,6 @@ function PondPill({
 	);
 }
 
-function SystemStatusTile({
-	stats,
-}: {
-	stats:
-		| {
-				systemStatus: 'healthy' | 'degraded' | 'offline';
-				lastReceivedAt: string | null;
-				minutesSinceLastData: number | null;
-				scope?: 'global' | 'mine';
-		  }
-		| undefined;
-}) {
-	if (!stats) {
-		return <StatTile label="System Status" value="—" accent="violet" />;
-	}
-	const isMine = stats.scope === 'mine';
-	const label = isMine ? 'System Status (My Ponds)' : 'System Status (Global)';
-	const map = {
-		healthy: { value: 'Healthy', accent: 'emerald' as const, pulse: true },
-		degraded: { value: 'Degraded', accent: 'rose' as const, pulse: false },
-		offline: { value: 'Offline', accent: 'rose' as const, pulse: false },
-	}[stats.systemStatus];
-
-	let sub = '';
-	if (stats.systemStatus === 'healthy') {
-		sub = isMine ? 'All your ponds sending data' : 'All ponds sending data';
-	} else if (stats.systemStatus === 'degraded' && stats.minutesSinceLastData !== null) {
-		sub = `Last data ${Math.floor(stats.minutesSinceLastData)} min ago`;
-	} else if (stats.systemStatus === 'offline') {
-		sub = isMine ? 'No data from your ponds' : 'No data received';
-	}
-
-	return (
-		<StatTile
-			label={label}
-			value={map.value}
-			accent={map.accent}
-			pulse={map.pulse}
-			sub={sub}
-		/>
-	);
-}
-
 function PondStatusDot({ status }: { status: PondStatus | undefined }) {
 	const key = status?.status ?? 'offline';
 	const minutes = status?.minutesSinceLastData;
@@ -556,11 +512,11 @@ function PondStatusDot({ status }: { status: PondStatus | undefined }) {
 		minutes === null || minutes === undefined
 			? 'No data received'
 			: key === 'online'
-				? `Last data ${mins} mins ago (within interval)`
+				? `Last data ${mins} mins ago`
 				: key === 'stale'
-					? `Last data ${mins} mins ago (missed 1–2 intervals)`
+					? `No data for ${mins} mins — check ESP32`
 					: key === 'offline'
-						? `No data for ${mins} mins (ESP32 may be offline)`
+						? `No data for ${mins} mins — OFFLINE — alarm triggered`
 						: `Last data ${mins} mins ago`;
 
 	const tooltip =

@@ -31,7 +31,7 @@ export default function SensorDetailPage({ params }: SensorDetailProps) {
 	const { pond, isLoading: isPondLoading } = usePond(pondId);
 	const { lookup } = useThresholds(pondId);
 	const optimal = lookup(sensorType);
-	const [range, setRange] = useState<Range>('7d');
+	const [range, setRange] = useState<Range>('today');
 	const {
 		readings,
 		payload,

@@ -36,6 +36,16 @@ type AlertRow = {
 	resolvedAt: string | null;
 };
 
+type AdminUserRow = {
+	id: string;
+	name: string;
+	email: string;
+	role: 'admin' | 'owner' | 'viewer';
+	createdAt: string | null;
+	expiresAt: string | null;
+	pondIds: string[];
+};
+
 async function fetcher<T>(url: string): Promise<T> {
 	const res = await fetch(url, { credentials: 'include' });
 	if (!res.ok) throw new Error(`${url} -> ${res.status}`);
@@ -60,7 +70,9 @@ export default function NotificationsPage() {
 	const { status: sessionStatus } = useSession();
 	const { user } = useAuthStore();
 	const isAdmin = user?.role === 'admin';
-	const [tab, setTab] = useState<'maintenance' | 'alerts'>('maintenance');
+	const [tab, setTab] = useState<'maintenance' | 'alerts' | 'expiring'>(
+		'maintenance',
+	);
 	const [statusFilter, setStatusFilter] = useState<string>('all');
 	const [pondFilter, setPondFilter] = useState<string>('all');
 
@@ -77,6 +89,12 @@ export default function NotificationsPage() {
 		isAdmin ? '/api/alerts' : null,
 		fetcher,
 		{ refreshInterval: 30_000 },
+	);
+
+	const { data: adminUsers } = useSWR<AdminUserRow[]>(
+		isAdmin ? '/api/admin/users' : null,
+		fetcher,
+		{ refreshInterval: 60_000 },
 	);
 
 	if (sessionStatus === 'loading') {
@@ -172,6 +190,13 @@ export default function NotificationsPage() {
 							Sensor Alerts
 						</TabButton>
 					)}
+					{isAdmin && (
+						<TabButton
+							active={tab === 'expiring'}
+							onClick={() => setTab('expiring')}>
+							Expiring Subscriptions
+						</TabButton>
+					)}
 				</div>
 
 				<div className="flex flex-wrap items-center gap-3">
@@ -213,7 +238,9 @@ export default function NotificationsPage() {
 					</select>
 				</div>
 
-				{tab === 'maintenance' ? (
+				{tab === 'expiring' ? (
+					<ExpiringSubscriptions users={adminUsers ?? []} />
+				) : tab === 'maintenance' ? (
 					mLoading ? (
 						<LoadingSpinner />
 					) : mErr ? (
@@ -369,6 +396,78 @@ export default function NotificationsPage() {
 				)}
 			</div>
 		</MainLayout>
+	);
+}
+
+function ExpiringSubscriptions({ users }: { users: AdminUserRow[] }) {
+	// eslint-disable-next-line react-hooks/purity
+	const now = Date.now();
+	const rows = users
+		.filter((u) => u.expiresAt !== null)
+		.map((u) => {
+			const ms = new Date(u.expiresAt as string).getTime();
+			const days = Math.floor((ms - now) / (1000 * 60 * 60 * 24));
+			return { ...u, daysLeft: days };
+		})
+		.filter((u) => u.daysLeft <= 30)
+		.sort((a, b) => a.daysLeft - b.daysLeft);
+
+	if (rows.length === 0) {
+		return (
+			<div className="rounded-xl border border-[var(--border)] p-8 text-center text-slate-500">
+				No subscriptions expiring within 30 days.
+			</div>
+		);
+	}
+
+	return (
+		<div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+			<table className="min-w-full text-sm">
+				<thead className="bg-white/5 text-[10px] uppercase tracking-wider text-slate-400">
+					<tr>
+						<th className="text-left px-4 py-2.5">Name</th>
+						<th className="text-left px-4 py-2.5">Email</th>
+						<th className="text-left px-4 py-2.5">Role</th>
+						<th className="text-left px-4 py-2.5">Expires At</th>
+						<th className="text-left px-4 py-2.5">Days Left</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.map((u) => {
+						const critical = u.daysLeft <= 7;
+						const rowCls = critical
+							? 'border-t border-[var(--border)] bg-rose-500/5'
+							: 'border-t border-[var(--border)] hover:bg-white/3';
+						const daysCls = critical
+							? 'text-rose-300 font-semibold'
+							: 'text-amber-300 font-semibold';
+						return (
+							<tr key={u.id} className={rowCls}>
+								<td className="px-4 py-3 font-semibold text-slate-100 whitespace-nowrap">
+									{u.name}
+								</td>
+								<td className="px-4 py-3 font-mono text-xs text-slate-300 whitespace-nowrap">
+									{u.email}
+								</td>
+								<td className="px-4 py-3 text-slate-200 uppercase text-[11px] tracking-wider">
+									{u.role}
+								</td>
+								<td className="px-4 py-3 text-mono text-[12px] text-slate-300 whitespace-nowrap">
+									{u.expiresAt
+										? new Date(u.expiresAt).toLocaleDateString()
+										: '—'}
+								</td>
+								<td className={`px-4 py-3 text-mono ${daysCls}`}>
+									{u.daysLeft < 0
+										? `${Math.abs(u.daysLeft)}d ago`
+										: `${u.daysLeft}d`}
+								</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+		</div>
 	);
 }
 

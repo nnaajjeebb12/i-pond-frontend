@@ -58,7 +58,11 @@
       "Bash(taskkill /F /IM node.exe)",
       "Bash(node -e ' *)",
       "PowerShell(Stop-Process -Name node -Force -ErrorAction SilentlyContinue; Start-Sleep 3; \\(Get-Process node -ErrorAction SilentlyContinue\\).Count)",
-      "Bash(node scripts/docs/owner-manual.js)"
+      "Bash(node scripts/docs/owner-manual.js)",
+      "Bash(findstr /i DATABASE)",
+      "Bash(findstr /i \"DATABASE POSTGRES\")",
+      "Bash(mv \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.tsx\" \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.redirect.tsx.bak\")",
+      "Bash(mv \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.hidden.tsx.bak\" \"j:/1. Projects/5. github iPond/i-pond-frontend/src/app/utilization/page.tsx\")"
     ],
     "additionalDirectories": [
       "J:\\1. Projects\\5. github iPond\\i-pond-frontend"

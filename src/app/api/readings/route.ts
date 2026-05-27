@@ -16,6 +16,7 @@ const SENSOR_COLUMNS: Record<string, string> = {
 };
 
 type Range = "today" | "7d" | "14d" | "30d" | "1y";
+type Health = "normal" | "warning" | "critical";
 
 const RANGE_BUCKETS: Record<Exclude<Range, "today">, { bucket: string; interval: string; label: string }> = {
   "7d": { bucket: "1 hour", interval: "7 days", label: "1 hour" },
@@ -24,11 +25,17 @@ const RANGE_BUCKETS: Record<Exclude<Range, "today">, { bucket: string; interval:
   "1y": { bucket: "1 day", interval: "365 days", label: "1 day" },
 };
 
-function trendLabel(slope: number | null): "rising" | "falling" | "stable" {
-  if (slope === null || !Number.isFinite(slope)) return "stable";
-  if (slope > 0.001) return "rising";
-  if (slope < -0.001) return "falling";
-  return "stable";
+function deriveHealth(
+  avg: number | null,
+  mn: number | null,
+  mx: number | null
+): Health {
+  if (avg === null || mn === null || mx === null) return "normal";
+  const lowCrit = mn * 0.9;
+  const highCrit = mx * 1.1;
+  if (avg < lowCrit || avg > highCrit) return "critical";
+  if (avg < mn || avg > mx) return "warning";
+  return "normal";
 }
 
 async function ownsPond(userId: string, pondId: number): Promise<"yes" | "no" | "missing"> {
@@ -88,8 +95,6 @@ export async function GET(req: NextRequest) {
 
   const isAdmin = session.user.role === "admin";
 
-  // Resolve target ponds.
-  // Precedence: pond (single, legacy) > ponds (list/all) > default (all accessible).
   let pondId: number | null = null;
   let pondIds: number[] | null = null;
 
@@ -151,7 +156,6 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // Multi-pond or all: 15-minute buckets, avg across selected ponds.
       const idsFilter = pondIds ?? null;
       const sql = idsFilter
         ? `SELECT (time_bucket('15 minutes', sr.time AT TIME ZONE $1) AT TIME ZONE $1) AS bucket,
@@ -199,7 +203,8 @@ export async function GET(req: NextRequest) {
         min: number | null;
         max: number | null;
         anomaly_count: string;
-        trend_slope: number | null;
+        optimal_min: number | null;
+        optimal_max: number | null;
       }>(
         `SELECT
             (time_bucket($1::interval, sr.time AT TIME ZONE $5) AT TIME ZONE $5) AS bucket,
@@ -210,14 +215,15 @@ export async function GET(req: NextRequest) {
               WHERE sr.${column} < pst.optimal_min
                  OR sr.${column} > pst.optimal_max
             ) AS anomaly_count,
-            REGR_SLOPE(sr.${column}, EXTRACT(EPOCH FROM sr.time)) AS trend_slope
+            AVG(pst.optimal_min)::float8 AS optimal_min,
+            AVG(pst.optimal_max)::float8 AS optimal_max
            FROM sensor_readings sr
            LEFT JOIN pond_sensor_thresholds pst
              ON pst.pond_id = sr.pond_id
             AND pst.sensor  = $2
           WHERE sr.pond_id = $3
             AND sr.time >= NOW() - $4::interval
-          GROUP BY bucket, pst.optimal_min, pst.optimal_max
+          GROUP BY bucket
           ORDER BY bucket ASC
           LIMIT 2000`,
         [cfg.bucket, column, pondId, cfg.interval, TZ]
@@ -234,12 +240,11 @@ export async function GET(req: NextRequest) {
             min: r.min as number,
             max: r.max as number,
             anomalyCount: Number(r.anomaly_count),
-            trend: trendLabel(r.trend_slope),
+            health: deriveHealth(r.avg, r.optimal_min, r.optimal_max),
           })),
       });
     }
 
-    // Multi-pond aggregated.
     const idsFilter = pondIds ?? null;
     const sql = idsFilter
       ? `SELECT (time_bucket($1::interval, sr.time AT TIME ZONE $4) AT TIME ZONE $4) AS bucket,
@@ -249,7 +254,9 @@ export async function GET(req: NextRequest) {
                 COUNT(*) FILTER (
                   WHERE sr.${column} < pst.optimal_min
                      OR sr.${column} > pst.optimal_max
-                ) AS anomaly_count
+                ) AS anomaly_count,
+                AVG(pst.optimal_min)::float8 AS optimal_min,
+                AVG(pst.optimal_max)::float8 AS optimal_max
            FROM sensor_readings sr
            LEFT JOIN pond_sensor_thresholds pst
              ON pst.pond_id = sr.pond_id
@@ -267,7 +274,9 @@ export async function GET(req: NextRequest) {
                   COUNT(*) FILTER (
                     WHERE sr.${column} < pst.optimal_min
                        OR sr.${column} > pst.optimal_max
-                  ) AS anomaly_count
+                  ) AS anomaly_count,
+                  AVG(pst.optimal_min)::float8 AS optimal_min,
+                  AVG(pst.optimal_max)::float8 AS optimal_max
              FROM sensor_readings sr
              LEFT JOIN pond_sensor_thresholds pst
                ON pst.pond_id = sr.pond_id
@@ -283,7 +292,9 @@ export async function GET(req: NextRequest) {
                   COUNT(*) FILTER (
                     WHERE sr.${column} < pst.optimal_min
                        OR sr.${column} > pst.optimal_max
-                  ) AS anomaly_count
+                  ) AS anomaly_count,
+                  AVG(pst.optimal_min)::float8 AS optimal_min,
+                  AVG(pst.optimal_max)::float8 AS optimal_max
              FROM sensor_readings sr
              JOIN user_pond_access upa ON upa.pond_id = sr.pond_id
              LEFT JOIN pond_sensor_thresholds pst
@@ -306,6 +317,8 @@ export async function GET(req: NextRequest) {
       min: number | null;
       max: number | null;
       anomaly_count: string;
+      optimal_min: number | null;
+      optimal_max: number | null;
     }>(sql, params);
 
     return NextResponse.json({
@@ -319,7 +332,7 @@ export async function GET(req: NextRequest) {
           min: r.min as number,
           max: r.max as number,
           anomalyCount: Number(r.anomaly_count),
-          trend: "stable" as const,
+          health: deriveHealth(r.avg, r.optimal_min, r.optimal_max),
         })),
     });
   } catch (err) {
