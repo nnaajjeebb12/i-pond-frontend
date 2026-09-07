@@ -50,10 +50,6 @@ void lcdLine(uint8_t row, const String &msg)
 {
   lcd.setCursor(0, row);
   lcd.print(msg);
-  if (msg.length() > 0)
-  {
-    Serial.println("[LCD L" + String(row) + "] " + msg);
-  }
 }
 
 void lcdShow(const String &l0, const String &l1 = "", const String &l2 = "", const String &l3 = "")
@@ -86,20 +82,6 @@ void printToLCD()
   lcd.print("DO:");
   lcd.print(dox);
   lcdLine(2, "Json Parse Success");
-
-  // Mirror to Serial
-  Serial.println("=== SENSOR DATA ===");
-  Serial.print("Temperature: ");
-  Serial.println(rtd);
-  Serial.print("pH:          ");
-  Serial.println(ph);
-  Serial.print("Salinity:    ");
-  Serial.println(sal);
-  Serial.print("Dissolved O2:");
-  Serial.println(dox);
-  Serial.print("Pond:        ");
-  Serial.println(pnd);
-  Serial.println("===================");
 }
 
 // ----------------------------------------------------------------------------
@@ -422,19 +404,11 @@ void loop()
     Serial.println("WiFi reconnected: replaying backlog");
     replayBacklog();
   }
-  else
-  {
-    Serial.println("WiFi not connected: continuing local run");
-  }
   wasConnected = nowConnected;
 
   if (Serial2.available())
   {
     handleSerialInput();
-  }
-  else
-  {
-    Serial.println("Sensor module not connected...");
   }
   delay(200);
 }

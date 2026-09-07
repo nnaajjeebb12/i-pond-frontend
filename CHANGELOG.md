@@ -1,5 +1,31 @@
 # Changelog
 
+## [2026-07-18] — Mirror LCD output to Serial (new gateway firmware)
+### Changed
+- lcdLine() now Serial.println() every non-empty message as "[LCD Ln] msg"
+- lcdShow() unchanged (mirrors via lcdLine); empty lines skipped by length check
+- printToLCD() adds "=== SENSOR DATA ===" block to Serial (temp/pH/sal/dox/pond)
+- No LCD calls removed, no logic changed
+### Files Modified
+- esp32_iotgateway_new_soletronix.ino
+### Notes
+- For running with LCD disconnected — all UI now visible in Serial Monitor (9600 baud)
+
+## [2026-07-18] — SD card backlog in new gateway firmware
+### Changed
+- Added SD card offline backlog to esp32_iotgateway_new_soletronix.ino (separate from production esp32_iotgateway.ino)
+- SD init + pond1..5 dir creation in setup(); sdAvailable flag
+- saveToSD(): writes payload to /pondN/<millis>.txt on WiFi down OR HTTP non-2xx
+- replayBacklog(): re-POSTs stored files, removes on 2xx; runs on setup (if WiFi) and on WiFi reconnect in loop()
+- Payload saved to SD uses identical format to sendToServer() body
+- LCD feedback for all SD ops
+### Files Modified
+- esp32_iotgateway_new_soletronix.ino
+### Notes
+- SD_CS_PIN = 5 (matches sd_card_test.ino wiring)
+- Production firmware esp32_iotgateway.ino unchanged
+- IDE "cannot open SD.h/SPI.h" diagnostic is expected (Arduino libs not on VSCode include path)
+
 ## [2026-07-18] — SD test re-run via Serial command
 ### Changed
 - Refactored all 7 tests into runTests()

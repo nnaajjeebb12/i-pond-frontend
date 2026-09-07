@@ -75,6 +75,7 @@ No test suite. Verify changes via dev server + browser.
 - **Migrations**: 14 files in `/db/migrations/` (001 → 014)
 - **Deploy**: PM2 + Nginx + Cloudflare Tunnel + Docker
 - **ESP32**: `esp32_iotgateway.ino` — DO NOT change firmware
+- **ESP32 (SD variant)**: `esp32_iotgateway_new_soletronix.ino` — has SD card offline backlog (saveToSD/replayBacklog, SD_CS_PIN=5). Saves payload to `/pondN/<millis>.txt` on WiFi down or HTTP non-2xx; replays on setup + WiFi reconnect
 - **SD diagnostic**: `sd_card_test.ino` — standalone SD test (SD.h/SPI, CS GPIO5, 9600 baud). Tests in `runTests()`; type `run` in Serial Monitor (Newline ending) to re-run without reset
 
 ## Architecture

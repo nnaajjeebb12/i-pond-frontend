@@ -422,19 +422,11 @@ void loop()
     Serial.println("WiFi reconnected: replaying backlog");
     replayBacklog();
   }
-  else
-  {
-    Serial.println("WiFi not connected: continuing local run");
-  }
   wasConnected = nowConnected;
 
   if (Serial2.available())
   {
     handleSerialInput();
-  }
-  else
-  {
-    Serial.println("Sensor module not connected...");
   }
   delay(200);
 }
