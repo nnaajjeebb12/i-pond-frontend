@@ -125,7 +125,7 @@ Background cron every 5min
 - `user_pond_access` — M:N user ↔ pond access (tenant scoping).
 - `pond_sensor_thresholds` — per-pond optimal range per sensor: `optimal_min`, `optimal_max`, `optimal_value` (target, display-only, migration 012).
 - `pond_sensor_thresholds_audit` — threshold change history: `old_value`, `new_value`.
-- `ingestion_logs` — every ESP32 POST (success + error).
+- `ingestion_logs` — every ESP32 POST (success + error) + one row per pond per Pi sync batch (`raw_payload.source='local-pi'`).
 - `sensor_alerts` — out-of-range alert events. `sensor` allows `temperature/ph/salinity/dissolved_oxygen/connectivity` (migration 014). Fields: `triggered_at`, `consecutive_count`, `last_value`, `optimal_min`, `optimal_max`, `acknowledged_at`, `resolved_at`.
 - `pond_status_log` — heartbeat rows written on every ingest (`status='online'`); utilization derives stale/offline from row gaps.
 - `maintenance_requests` — owner → admin maintenance tickets.
@@ -155,7 +155,7 @@ Background cron every 5min
 
 ### Ingestion (Bearer token, no session)
 - `POST /api/send-sensor-data` — ESP32 ingest. Writes `sensor_readings` (`source='esp32'`) + `ingestion_logs` + `pond_status_log` heartbeat. Server stamps `time = NOW()`. `pnd` 1..9999.
-- `POST /api/sync` — Pi appliance receiver (Bearer `SYNC_TOKEN`, ≠ `API_TOKEN`). Body `{ readings: [{ time, owner_id, pond_code, temperature, ph, salinity, dissolved_oxygen, source }] }`. Pond resolved via `user_pond_access`. `time` passed straight to `::timestamptz` — never round through JS `Date`. Response `{ ok, inserted, skipped, unknown }` (`unknown` = unresolved pond; Pi prefers it over `skipped`). **Wire contract frozen** — Pis have no auto-update.
+- `POST /api/sync` — Pi appliance receiver (Bearer `SYNC_TOKEN`, ≠ `API_TOKEN`). Body `{ readings: [{ time, owner_id, pond_code, temperature, ph, salinity, dissolved_oxygen, source }] }`. Pond resolved via `user_pond_access`. `time` passed straight to `::timestamptz` — never round through JS `Date`. Response `{ ok, inserted, skipped, unknown }` (`unknown` = unresolved pond; Pi prefers it over `skipped`). Writes **one `ingestion_logs` row per pond per batch** (`raw_payload.source='local-pi'`, rows/inserted/from/to, sensor cols = newest reading) + rows for 401/400/500 and `sync_unknown_pond`. **Wire contract frozen** — Pis have no auto-update.
 
 ### Auth
 - `GET|POST /api/auth/[...nextauth]` — NextAuth handlers

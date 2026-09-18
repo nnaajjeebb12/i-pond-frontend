@@ -1,5 +1,14 @@
 # Changelog
 
+## [2026-09-18] — Pi sync visible in ingestion logs
+### Changed
+- `/api/sync` now writes `ingestion_logs`: one row per pond per batch (not per reading — batches are 500 rows). `raw_payload` = `{ source:'local-pi', owner_id, pond_code, rows, inserted, from, to, latest }`; sensor columns = newest reading in the batch so `/admin/logs` shows live values. Also logs 401 `sync_unauthorized`, 400 `sync_invalid_json` / `sync_invalid_payload`, 500 `sync_server_error`, and 200 + `sync_unknown_pond` for codes that did not resolve.
+### Files Modified
+- src/app/api/sync/route.ts
+- CLAUDE.md
+### Notes
+- Filter `/admin/logs` by error `sync_unknown_pond` to find ponds the Pi has that the server lacks under that owner.
+
 ## [2026-09-18] — Pi appliance handover: sync receiver, alert fixes, Acknowledge/Ignore all
 ### Changed
 - Migration 015: `sensor_readings.source` column + UNIQUE index `(pond_id, time)` (dedupes first). Without the unique index every `/api/sync` batch 500'd on `ON CONFLICT`.
