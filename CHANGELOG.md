@@ -29,7 +29,7 @@
 ### Notes
 - **Server steps**: (1) set `SYNC_TOKEN` in `.env` (≠ `API_TOKEN`); (2) apply migration 015 — fails if the dedupe can't run, check output; (3) `docker compose up -d` to pick up tuning + port bind (restarts DB, ~seconds downtime); (4) `npm run build && pm2 restart ipond`.
 - `pond_code` stays globally unique (handover §4.2 option 1 NOT taken): direct ESP32 ingest resolves `PND-###` with no owner context. Second Pi site needs a distinct PND range on the server.
-- Migration not tested locally (no Docker on this machine). Verify on server with `\d sensor_readings` → `idx_sensor_readings_pond_time_unique`.
+- Applied on server 2026-09-18. Server already had a hand-made `uq_sensor_readings_pond_time`; migration now skips index creation when a unique `(pond_id, time)` index exists. Duplicate `idx_sensor_readings_pond_time_unique` dropped on server.
 - Not ported from handover §6: 15-min continuous aggregate, ingest transaction, heartbeat throttle, `scripts/latest.js`, per-row ack on `/notifications`.
 
 ## [2026-07-18] — Mirror LCD output to Serial (new gateway firmware)

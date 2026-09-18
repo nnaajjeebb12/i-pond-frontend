@@ -21,8 +21,20 @@ DELETE FROM sensor_readings a
    AND a.time = b.time
    AND a.ctid > b.ctid;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sensor_readings_pond_time_unique
-    ON sensor_readings (pond_id, time);
+-- The live server already had a hand-made uq_sensor_readings_pond_time.
+-- Only build ours when no unique (pond_id, time) index exists.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+         WHERE tablename = 'sensor_readings'
+           AND indexdef LIKE '%UNIQUE%'
+           AND indexdef LIKE '%(pond_id, "time")%'
+    ) THEN
+        CREATE UNIQUE INDEX idx_sensor_readings_pond_time_unique
+            ON sensor_readings (pond_id, time);
+    END IF;
+END $$;
 
 -- pond_code stays globally unique (005_admin_management.sql). Direct ESP32
 -- ingest resolves PND-### with no owner context, so per-owner codes would
