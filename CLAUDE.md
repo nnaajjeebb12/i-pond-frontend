@@ -72,10 +72,12 @@ No test suite. Verify changes via dev server + browser.
 - **HTTP**: axios
 - **Time**: moment
 - **Database**: TimescaleDB pg16 (Docker, `docker-compose.yml`)
-- **Migrations**: 14 files in `/db/migrations/` (001 → 014)
+- **Migrations**: 15 files in `/db/migrations/` (001 → 015)
 - **Deploy**: PM2 + Nginx + Cloudflare Tunnel + Docker
 - **ESP32**: `esp32_iotgateway.ino` — DO NOT change firmware
 - **ESP32 (SD variant)**: `esp32_iotgateway_new_soletronix.ino` — has SD card offline backlog (saveToSD/replayBacklog, SD_CS_PIN=5). Saves payload to `/pondN/<millis>.txt` on WiFi down or HTTP non-2xx; replays on setup + WiFi reconnect
+- **ESP32 (USB-serial variant, Pi appliance)**: `esp32_iotgateway_new_soletronix_Serial/esp32_iotgateway_new_soletronix_Serial.ino` — no WiFi/SD, emits one JSON line per reading over USB Serial. Byte-level `{…}` capture (never `readString()` — it blocks until 1 s of silence and hung after first reading). `# …` lines are diagnostics.
+- **Raspberry Pi appliance**: separate repo `ipond-local`. Pushes readings to `POST /api/sync`. See `MAIN-SERVER-HANDOVER.md` for the frozen wire contract.
 - **SD diagnostic**: `sd_card_test.ino` — standalone SD test (SD.h/SPI, CS GPIO5, 9600 baud). Tests in `runTests()`; type `run` in Serial Monitor (Newline ending) to re-run without reset
 
 ## Architecture
@@ -84,6 +86,11 @@ No test suite. Verify changes via dev server + browser.
 ESP32 (15min interval)
   → POST https://seeme-db.com/api/send-sensor-data
   → Nginx :80
+
+Raspberry Pi appliance (cron */5, 500 rows/batch)
+  → POST https://seeme-db.com/api/sync  (Bearer SYNC_TOKEN)
+  → resolves (owner_id, pond_code) via user_pond_access
+  → INSERT … ON CONFLICT (pond_id, time) DO NOTHING
   → Next.js/PM2 :3000
   → TimescaleDB :5432 (localhost only)
 
@@ -112,9 +119,9 @@ Background cron every 5min
 
 ## Database Tables
 
-- `sensor_readings` — hypertable, partitioned by `time` (TIMESTAMPTZ). Columns: `pond_id`, `temperature`, `ph`, `salinity`, `dissolved_oxygen`.
+- `sensor_readings` — hypertable, partitioned by `time` (TIMESTAMPTZ). Columns: `pond_id`, `temperature`, `ph`, `salinity`, `dissolved_oxygen`, `source` (`'esp32'` direct ingest / `'local-pi'` synced, migration 015). UNIQUE `(pond_id, time)` (migration 015) — required by `/api/sync` ON CONFLICT.
 - `owners` — users. Roles admin/owner/viewer, bcrypt `password_hash`. Subscription: `expires_at`, `subscription_notified_30`, `subscription_notified_7` (migration 013).
-- `ponds` — pond metadata, `pond_code` `PND-001`..`PND-010`, `name`.
+- `ponds` — pond metadata, `pond_code` `PND-001`..`PND-9999`, `name`. `pond_code` is **globally** unique (direct ESP32 ingest has no owner context) — a second Pi site must use a distinct PND range. `owner_id` is legacy/unused; ownership is `user_pond_access`.
 - `user_pond_access` — M:N user ↔ pond access (tenant scoping).
 - `pond_sensor_thresholds` — per-pond optimal range per sensor: `optimal_min`, `optimal_max`, `optimal_value` (target, display-only, migration 012).
 - `pond_sensor_thresholds_audit` — threshold change history: `old_value`, `new_value`.
@@ -147,7 +154,8 @@ Background cron every 5min
 ## API Routes
 
 ### Ingestion (Bearer token, no session)
-- `POST /api/send-sensor-data` — ESP32 ingest. Writes `sensor_readings` + `ingestion_logs` + `pond_status_log` heartbeat. Server stamps `time = NOW()`.
+- `POST /api/send-sensor-data` — ESP32 ingest. Writes `sensor_readings` (`source='esp32'`) + `ingestion_logs` + `pond_status_log` heartbeat. Server stamps `time = NOW()`. `pnd` 1..9999.
+- `POST /api/sync` — Pi appliance receiver (Bearer `SYNC_TOKEN`, ≠ `API_TOKEN`). Body `{ readings: [{ time, owner_id, pond_code, temperature, ph, salinity, dissolved_oxygen, source }] }`. Pond resolved via `user_pond_access`. `time` passed straight to `::timestamptz` — never round through JS `Date`. Response `{ ok, inserted, skipped, unknown }` (`unknown` = unresolved pond; Pi prefers it over `skipped`). **Wire contract frozen** — Pis have no auto-update.
 
 ### Auth
 - `GET|POST /api/auth/[...nextauth]` — NextAuth handlers
@@ -161,7 +169,7 @@ Background cron every 5min
 
 ### Dashboard data (session required)
 - `GET /api/ponds` — ponds scoped to user
-- `GET /api/ponds/status` — live status per pond (logs snapshot, via `getPondStatus()`)
+- `GET /api/ponds/status` — live status per pond via `getPondStatus()`. True last reading per pond (LATERAL). Raises connectivity alert with `NOT EXISTS` guard + 24 h cooldown; never-seen ponds not alerted.
 - `GET /api/dashboard/stats` — system health summary
 - `GET /api/readings` — aggregated time-series (today/7d/14d/30d/1y)
 - `GET /api/readings/latest?pond=N` — latest reading per pond
@@ -178,6 +186,7 @@ Background cron every 5min
 - `GET /api/alerts` — full history (admin only)
 - `GET /api/alerts/active` — unacknowledged
 - `POST /api/alerts/[id]/acknowledge`
+- `POST /api/alerts/acknowledge-all` — all visible open alerts (viewer forbidden)
 
 ### Maintenance (session required)
 - `GET /api/maintenance` — scoped to user
@@ -207,6 +216,9 @@ Background cron every 5min
 - Never open port 5432 to the internet.
 - Pond status always via shared `getPondStatus()` (`@/lib/pondStatus`) — never duplicate.
 - Alert detection: background worker ONLY — never in ingestion route.
+- **Every INSERT into `sensor_alerts` must guard with `NOT EXISTS`** — no unique index exists (migration 010 dropped it). `ON CONFLICT` catches nothing.
+- `REALERT_COOLDOWN` = `'24 hours'` in `scripts/alert-worker.ts` AND `src/app/api/ponds/status/route.ts` — keep equal.
+- `/api/sync` wire contract is frozen (see Ingestion). Additive fields only.
 - Status logging: `pond_status_log` written on every ingest — never via dashboard polling.
 - No client timestamps — server stamps `time = NOW()` always.
 - uPlot destroy + recreate on range change — never update in place.
@@ -228,8 +240,8 @@ Background cron every 5min
 
 - **Sensor**: 7 consecutive out-of-range readings → INSERT `sensor_alerts` (re-alerts after acknowledge).
 - **Connectivity**: 20+ mins no data → INSERT `sensor_alerts` with `sensor='connectivity'` (auto-resolves on next data).
-- **Worker**: `scripts/alert-worker.ts`, cron `*/5 * * * *`.
-- **Popup**: shows ALL unacknowledged alerts on login, no time limit.
+- **Worker**: `scripts/alert-worker.ts`, cron `*/5 * * * *`. `mayRaise()` guard: no re-raise while open or acknowledged within 24 h. Sensor alerts auto-resolve on first in-range reading. Never-seen ponds skipped.
+- **Popup**: shows ALL unacknowledged alerts on login, no time limit. Per-row **Acknowledge** (server) / **Ignore** (browser `sessionStorage`, keyed `pondId:sensor`). Header **Acknowledge all** / **Ignore all**. Optimistic; failures shown inline. Acknowledge revalidates `/api/alerts/active` + `/api/notifications/unread-count`.
 
 ## Subscription Model
 
@@ -242,6 +254,8 @@ Background cron every 5min
 - **Server**: Ubuntu 24.04, `192.168.100.159`, `soletronix` user.
 - **Deploy**: `git pull && npm install && npm run build && pm2 restart ipond`
 - **Migration**: `docker exec -i soletronix-timescaledb psql -U soletronix -d soletronix < db/migrations/XXX.sql`
+- **Postgres tuning** lives in `docker-compose.yml` `command:` (mounting migrations over `/docker-entrypoint-initdb.d` disables `timescaledb-tune`). Sized for ~4 GB RAM — scale to server. Container restart required to apply.
+- 5432 bound to `127.0.0.1` only.
 - Never commit `.env`. Never commit `.next` folder.
 
 ## Conventions
@@ -251,7 +265,7 @@ Background cron every 5min
 - DB pool: `@/lib/db` (singleton, `max: 5`); worker uses its own pool (`max: 3`).
 - Admin guard: `@/lib/admin` → `requireAdmin()`.
 - Session: NextAuth via `@/auth`.
-- Ingestion auth: Bearer token from `API_TOKEN` env var.
+- Ingestion auth: Bearer token from `API_TOKEN` env var. Sync auth: `SYNC_TOKEN` (must differ).
 
 ## What NOT to Do
 

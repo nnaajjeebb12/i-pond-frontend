@@ -4,11 +4,42 @@ services:
     container_name: soletronix-timescaledb
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      # localhost only — never expose 5432 to the internet.
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Mounting ./db/migrations over /docker-entrypoint-initdb.d replaces the
+    # directory where the TimescaleDB image keeps its timescaledb-tune step,
+    # so without these flags the container runs stock Postgres defaults
+    # (128 MB shared_buffers, fsync every commit, random_page_cost=4).
+    # Sized for ~4 GB RAM; scale shared_buffers (~25%) and
+    # effective_cache_size (~50-75%) to the server.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - synchronous_commit=off
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - max_wal_size=2GB
+      - -c
+      - wal_compression=on
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - log_checkpoints=on
+      - -c
+      - timescaledb.max_background_workers=8
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro

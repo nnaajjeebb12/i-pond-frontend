@@ -35,6 +35,25 @@ const pool = new Pool({
 const SENSORS = ['temperature', 'ph', 'salinity', 'dissolved_oxygen'] as const;
 const CONSECUTIVE_THRESHOLD = 7;
 const CONNECTIVITY_TIMEOUT_MINS = 20;
+// Must equal REALERT_COOLDOWN in src/app/api/ponds/status/route.ts.
+const REALERT_COOLDOWN = '24 hours';
+
+// There is NO unique index on sensor_alerts (migration 010 dropped it), so
+// every insert must guard here. Don't re-raise the same pond + sensor while
+// an alert is open (unacknowledged, unresolved) or was acknowledged inside
+// the cooldown — otherwise acknowledging buys five minutes of quiet and the
+// popup is effectively un-dismissable.
+async function mayRaise(pondId: number, sensor: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM sensor_alerts
+      WHERE pond_id = $1 AND sensor = $2
+        AND ((acknowledged_at IS NULL AND resolved_at IS NULL)
+             OR acknowledged_at > NOW() - $3::interval)
+      LIMIT 1`,
+    [pondId, sensor, REALERT_COOLDOWN],
+  );
+  return rows.length === 0;
+}
 
 async function checkConnectivityAlert(pondId: number, pondName: string) {
   const { rows } = await pool.query<{ last_seen: Date | null }>(
@@ -47,22 +66,20 @@ async function checkConnectivityAlert(pondId: number, pondName: string) {
     ? (Date.now() - new Date(lastSeen).getTime()) / 1000 / 60
     : null;
 
-  if (minutesAgo === null || minutesAgo >= CONNECTIVITY_TIMEOUT_MINS) {
-    const existing = await pool.query(
-      `SELECT id FROM sensor_alerts
-        WHERE pond_id = $1 AND sensor = 'connectivity' AND acknowledged_at IS NULL`,
-      [pondId],
-    );
+  // Ponds that have never sent a reading are not alerted on — ten seeded
+  // ponds and one gateway would otherwise be nine permanent alerts.
+  if (minutesAgo === null) return;
 
-    if (existing.rows.length === 0) {
+  if (minutesAgo >= CONNECTIVITY_TIMEOUT_MINS) {
+    if (await mayRaise(pondId, 'connectivity')) {
       await pool.query(
         `INSERT INTO sensor_alerts
            (pond_id, sensor, triggered_at, consecutive_count, last_value, optimal_min, optimal_max)
          VALUES ($1, 'connectivity', NOW(), 1, $2, 0, 0)`,
-        [pondId, minutesAgo ?? -1],
+        [pondId, minutesAgo],
       );
       console.log(
-        `[ALERT] Pond ${pondId} (${pondName}) connectivity — ${minutesAgo?.toFixed(0) ?? 'never'} mins since last data`,
+        `[ALERT] Pond ${pondId} (${pondName}) connectivity — ${minutesAgo.toFixed(0)} mins since last data`,
       );
     }
   } else {
@@ -107,13 +124,7 @@ async function checkSensorAlerts(pondId: number) {
     );
 
     if (allOutOfRange) {
-      const existing = await pool.query(
-        `SELECT id FROM sensor_alerts
-          WHERE pond_id = $1 AND sensor = $2 AND acknowledged_at IS NULL`,
-        [pondId, sensor],
-      );
-
-      if (existing.rows.length === 0) {
+      if (await mayRaise(pondId, sensor)) {
         const lastValue = readings[0].value;
         await pool.query(
           `INSERT INTO sensor_alerts
@@ -123,6 +134,14 @@ async function checkSensorAlerts(pondId: number) {
         );
         console.log(`[ALERT] Pond ${pondId} — ${sensor} alert. Last: ${lastValue}`);
       }
+    } else if (readings[0].value >= optimal_min && readings[0].value <= optimal_max) {
+      // Latest reading back in range → close any open alert for this sensor.
+      await pool.query(
+        `UPDATE sensor_alerts
+            SET resolved_at = NOW()
+          WHERE pond_id = $1 AND sensor = $2 AND resolved_at IS NULL`,
+        [pondId, sensor],
+      );
     }
   }
 }

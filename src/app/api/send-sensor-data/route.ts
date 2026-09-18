@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
   }
 
   const pndNum = Math.trunc(d.pnd);
-  if (pndNum < 1 || pndNum > 10) {
+  if (pndNum < 1 || pndNum > 9999) {
     await writeLog({
       pondId: null,
       pondCode: null,
@@ -187,8 +187,8 @@ export async function POST(req: NextRequest) {
 
     await pool.query(
       `INSERT INTO sensor_readings
-         (time, pond_id, temperature, ph, salinity, dissolved_oxygen)
-       VALUES (NOW(), $1, $2, $3, $4, $5)`,
+         (time, pond_id, temperature, ph, salinity, dissolved_oxygen, source)
+       VALUES (NOW(), $1, $2, $3, $4, $5, 'esp32')`,
       [pondId, temperature, ph, salinity, dissolvedOxygen]
     );
 
